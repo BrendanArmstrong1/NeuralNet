@@ -27,16 +27,16 @@ for file in p.iterdir():
 
 y_val = np.load(files[0])
 y = np.load(files[1])
-X = (np.load(files[2]).astype(np.float32) - 127.5) / 127.5
-X_val = (np.load(files[3]).astype(np.float32) - 127.5) / 127.5
+X = np.load(files[2]).astype(np.float64) / 255
+X_val = np.load(files[3]).astype(np.float64) / 255
 
 keys = np.array(range(X.shape[0]))
 np.random.shuffle(keys)
 X = X[keys]
 y = y[keys]
 
-X = X.reshape(X.shape[0], 1, 28, 28).astype('float64')
-X_val = X_val.reshape(X_val.shape[0], 1, 28, 28).astype('float64')
+X = X.reshape(X.shape[0], 1, 28, 28)
+X_val = X_val.reshape(X_val.shape[0], 1, 28, 28)
 
 '''
 for i in range(10):
@@ -82,4 +82,4 @@ model.finalize()
 model.train(X, y, validation_data=(X_val, y_val),
             epochs=17, print_every=100, batch_size=64)
 
-model.save('models/BigTrainModel.model')
+model.save('models/PositiveDense.model')

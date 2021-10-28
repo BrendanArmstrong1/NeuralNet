@@ -48,7 +48,7 @@ class Layer_Dense:
         self.biases = biases
 
     @staticmethod
-    @njit(parallel=True, nogil=True)
+    #@njit(parallel=True, nogil=True)
     def dot_forward(inputs, weights, biases):
         batch_number = inputs.shape[0]
         layer_number = weights.shape[1]
@@ -256,6 +256,9 @@ class Activation_Softmax:
             single_output = single_output.reshape(-1,1)
             jacobian_matrix = np.diagflat(single_output) - np.dot(single_output, single_output.T)
             self.dinputs[index] = np.dot(jacobian_matrix, single_dvalues)
+
+    def reversed(self, dvalues):
+        pass
 
     def predictions(self, output):
         return np.argmax(output, axis=1)
