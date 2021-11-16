@@ -42,10 +42,12 @@ D1.set_parameters(weights[0], biases[0])
 D2.set_parameters(weights[1], biases[1])
 D3.set_parameters(weights[2], biases[2])
 D4.set_parameters(weights[3], biases[3])
-D1_avg = []
-D2_avg = []
-D3_avg = []
+
+
 D4_avg = []
+D4_std = []
+D4_max = []
+D4_min = []
 
 for image_path in tqdm(png):
     image = Image.open(image_path)
@@ -59,12 +61,14 @@ for image_path in tqdm(png):
     D4.forward(D3.output, training=False)
     A.forward(D4.output, training=False)
 
-    D1_avg.append(np.average(D1.output))
-    D2_avg.append(np.average(D2.output))
-    D3_avg.append(np.average(D3.output))
-    D4_avg.append(np.average(D4.output))
+    D4_avg.append(np.mean(D4.output))
+    D4_std.append(np.std(D4.output))
+    D4_max.append(np.max(D4.output))
+    D4_min.append(np.min(D4.output))
 
-print("D1 avg: ", np.mean(D1_avg), "Std: ", np.std(D1_avg))
-print("D2 avg: ", np.mean(D2_avg), "Std: ", np.std(D2_avg))
-print("D3 avg: ", np.mean(D3_avg), "Std: ", np.std(D3_avg))
+
+print('')
 print("D4 avg: ", np.mean(D4_avg), "Std: ", np.std(D4_avg))
+print("D4 std: ", np.mean(D4_std), "Std: ", np.std(D4_std))
+print("D4 max: ", np.mean(D4_max), "Std: ", np.std(D4_max))
+print("D4 min: ", np.mean(D4_min), "Std: ", np.std(D4_min))

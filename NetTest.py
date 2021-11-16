@@ -38,15 +38,16 @@ y = y[keys]
 X = X.reshape(X.shape[0], 1, 28, 28)
 X_val = X_val.reshape(X_val.shape[0], 1, 28, 28)
 
+print(np.around(X[1], decimals=3))
+print(fashion_mnist_labels[y[1]])
+
 '''
 for i in range(10):
     print(np.around(X[i].reshape(28,28), decimals=2))
     print(fashion_mnist_labels[y[i]])
     time.sleep(0.8)
-'''
 model = Model()
 
-'''
 model.add(Layer_Conv2D(32, (1, 5, 5),
           weight_regularizer_l2=5e-7, bias_regularizer_l2=5e-7))
 model.add(Activation_RelU())
@@ -57,7 +58,6 @@ model.add(Layer_Conv2D(64, (32, 5, 5),
 model.add(Activation_RelU())
 model.add(Layer_Dropout(0.35))
 model.add(Layer_Maxpooling())
-'''
 model.add(Layer_Flattening())
 model.add(Layer_Dense(784, 512, weight_regularizer_l2=5e-7,
           bias_regularizer_l2=5e-7))
@@ -83,3 +83,4 @@ model.train(X, y, validation_data=(X_val, y_val),
             epochs=17, print_every=100, batch_size=64)
 
 model.save('models/PositiveDense.model')
+'''
