@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>~/S/Python/NeuralNet/NeuralNet.py.html</title>
+    <meta name="Generator" content="Vim/8.2">
+    <meta name="plugin-version" content="vim8.1_v2">
+    <meta name="syntax" content="python">
+    <meta name="settings"
+        content="number_lines,use_css,pre_wrap,no_foldcolumn,expand_tabs,line_ids,prevent_copy=,use_input_for_pc=fallback">
+    <meta name="colorscheme" content="sonokai">
+    <style>
+        <!--
+        pre {
+            white-space: pre-wrap;
+            font-family: monospace;
+            color: #bcbcbc;
+            background-color: #ffffff;
+        }
+
+        body {
+            font-family: monospace;
+            color: #bcbcbc;
+            background-color: #ffffff;
+        }
+
+        * {
+            font-size: 1em;
+        }
+
+        .Error {
+            color: #ff5f5f;
+        }
+
+        .String {
+            color: #d7af5f;
+        }
+
+        .LineNr {
+            color: #585858;
+        }
+
+        .Boolean {
+            color: #d787d7;
+        }
+
+        .Float {
+            color: #d787d7;
+        }
+
+        .Structure {
+            color: #87afd7;
+        }
+
+        .Comment {
+            color: #949494;
+            font-style: italic;
+        }
+
+        .Number {
+            color: #d787d7;
+        }
+
+        .Identifier {
+            color: #ffaf5f;
+        }
+
+        .Statement {
+            color: #ff5f5f;
+        }
+
+        .PreProc {
+            color: #ff5f5f;
+        }
+
+        .Function {
+            color: #87af5f;
+        }
+
+        .Green {
+            color: #87af5f;
+        }
+
+        .OrangeItalic {
+            color: #ffaf5f;
+        }
+
+        .Grey {
+            color: #949494;
+        }
+
+        .Red {
+            color: #ff5f5f;
+        }
+
+        .Special {
+            color: #d787d7;
+        }
+        -->
+    </style>
+
+    <script>
+< !--
+
+            /* function to open any folds containing a jumped-to line before jumping to it */
+            function JumpToLine() {
+                var lineNum;
+                lineNum = window.location.hash;
+                lineNum = lineNum.substr(1); /* strip off '#' */
+
+                if (lineNum.indexOf('L') == -1) {
+                    lineNum = 'L' + lineNum;
+                }
+                var lineElem = document.getElementById(lineNum);
+                /* Always jump to new location even if the line was hidden inside a fold, or
+                 * we corrected the raw number to a line ID.
+                 */
+                if (lineElem) {
+                    lineElem.scrollIntoView(true);
+                }
+                return true;
+            }
+        if ('onhashchange' in window) {
+            window.onhashchange = JumpToLine;
+        }
+
+        -->
+    </script>
+</head>
+
+<body onload='JumpToLine();'>
+    <pre id='vimCodeElement'>
+<span id="L1" class="LineNr">  1 </span><span class="PreProc">import</span> numpy <span class="Statement">as</span> np
+<span id="L2" class="LineNr">  2 </span><span class="PreProc">from</span> numba <span class="PreProc">import</span> njit, prange
+<span id="L3" class="LineNr">  3 </span><span class="PreProc">import</span> pickle
+<span id="L4" class="LineNr">  4 </span><span class="PreProc">import</span> copy
+<span id="L5" class="LineNr">  5 </span>
+<span id="L6" class="LineNr">  6 </span>
+<span id="L7" class="LineNr">  7 </span>
+<span id="L8" class="LineNr">  8 </span><span class="Statement">class</span> <span class="Structure">Layer_Dense</span>:
+<span id="L9" class="LineNr">  9 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, n_inputs, n_neurons, weight_regularizer_l1<span class="Red">=</span><span class="Number">0</span>, weight_regularizer_l2<span class="Red">=</span><span class="Number">0</span>, bias_regularizer_l1<span class="Red">=</span><span class="Number">0</span>, bias_regularizer_l2<span class="Red">=</span><span class="Number">0</span>):
+<span id="L10" class="LineNr"> 10 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weights <span class="Red">=</span> np<span class="Grey">.</span>random<span class="Grey">.</span><span class="Function">normal</span>(<span class="Number">0</span>, <span class="Float">0.007</span>, size<span class="Red">=</span>(n_inputs, n_neurons))
+<span id="L11" class="LineNr"> 11 </span>        <span class="Identifier">self</span><span class="Grey">.</span>biases <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros</span>((<span class="Number">1</span>, n_neurons))
+<span id="L12" class="LineNr"> 12 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l1 <span class="Red">=</span> weight_regularizer_l1
+<span id="L13" class="LineNr"> 13 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l2 <span class="Red">=</span> weight_regularizer_l2
+<span id="L14" class="LineNr"> 14 </span>        <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l2 <span class="Red">=</span> bias_regularizer_l2
+<span id="L15" class="LineNr"> 15 </span>        <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l1 <span class="Red">=</span> bias_regularizer_l1
+<span id="L16" class="LineNr"> 16 </span>
+<span id="L17" class="LineNr"> 17 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L18" class="LineNr"> 18 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs
+<span id="L19" class="LineNr"> 19 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">dot_forward</span>(<span class="Identifier">self</span><span class="Grey">.</span>inputs, <span class="Identifier">self</span><span class="Grey">.</span>weights, <span class="Identifier">self</span><span class="Grey">.</span>biases)
+<span id="L20" class="LineNr"> 20 </span>
+<span id="L21" class="LineNr"> 21 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L22" class="LineNr"> 22 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">dot_forward</span>(np<span class="Grey">.</span><span class="Function">ascontiguousarray</span>(<span class="Identifier">self</span><span class="Grey">.</span>inputs<span class="Grey">.</span>T), dvalues, <span class="Number">0</span>)
+<span id="L23" class="LineNr"> 23 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dbiases <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sum</span>(dvalues, axis<span class="Red">=</span><span class="Number">0</span>, keepdims<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L24" class="LineNr"> 24 </span>
+<span id="L25" class="LineNr"> 25 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l1 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L26" class="LineNr"> 26 </span>            dL1 <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">ones_like</span>(<span class="Identifier">self</span><span class="Grey">.</span>weights)
+<span id="L27" class="LineNr"> 27 </span>            dL1[<span class="Identifier">self</span><span class="Grey">.</span>weights <span class="Red">&lt;</span> <span class="Number">0</span>] <span class="Red">=</span> <span class="Red">-</span><span class="Number">1</span>
+<span id="L28" class="LineNr"> 28 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">+=</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l1 <span class="Red">*</span> dL1
+<span id="L29" class="LineNr"> 29 </span>
+<span id="L30" class="LineNr"> 30 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l2 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L31" class="LineNr"> 31 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">+=</span> <span class="Number">2</span> <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l2 <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>weights
+<span id="L32" class="LineNr"> 32 </span>
+<span id="L33" class="LineNr"> 33 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l1 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L34" class="LineNr"> 34 </span>            dL1 <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">ones_like</span>(<span class="Identifier">self</span><span class="Grey">.</span>biases)
+<span id="L35" class="LineNr"> 35 </span>            dL1[<span class="Identifier">self</span><span class="Grey">.</span>biases<span class="Red">&lt;</span> <span class="Number">0</span>] <span class="Red">=</span> <span class="Red">-</span><span class="Number">1</span>
+<span id="L36" class="LineNr"> 36 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dbiases <span class="Red">+=</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l1 <span class="Red">*</span> dL1
+<span id="L37" class="LineNr"> 37 </span>
+<span id="L38" class="LineNr"> 38 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l2 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L39" class="LineNr"> 39 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dbiases <span class="Red">+=</span> <span class="Number">2</span> <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l2 <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>biases
+<span id="L40" class="LineNr"> 40 </span><span class="Error">            </span>
+<span id="L41" class="LineNr"> 41 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">dot_forward</span>(dvalues, <span class="Identifier">self</span><span class="Grey">.</span>weights<span class="Grey">.</span>T, <span class="Number">0</span>)
+<span id="L42" class="LineNr"> 42 </span>
+<span id="L43" class="LineNr"> 43 </span>    <span class="Statement">def</span> <span class="Green">get_parameters</span>(<span class="Identifier">self</span>):
+<span id="L44" class="LineNr"> 44 </span>        <span class="Statement">return</span> <span class="Identifier">self</span><span class="Grey">.</span>weights, <span class="Identifier">self</span><span class="Grey">.</span>biases
+<span id="L45" class="LineNr"> 45 </span>
+<span id="L46" class="LineNr"> 46 </span>    <span class="Statement">def</span> <span class="Green">set_parameters</span>(<span class="Identifier">self</span>, weights, biases):
+<span id="L47" class="LineNr"> 47 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weights <span class="Red">=</span> weights
+<span id="L48" class="LineNr"> 48 </span>        <span class="Identifier">self</span><span class="Grey">.</span>biases <span class="Red">=</span> biases
+<span id="L49" class="LineNr"> 49 </span>
+<span id="L50" class="LineNr"> 50 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">staticmethod</span>
+<span id="L51" class="LineNr"> 51 </span>    <span class="Comment">#@njit(parallel=True, nogil=True)</span>
+<span id="L52" class="LineNr"> 52 </span>    <span class="Statement">def</span> <span class="Green">dot_forward</span>(inputs, weights, biases):
+<span id="L53" class="LineNr"> 53 </span>        batch_number <span class="Red">=</span> inputs<span class="Grey">.</span>shape[<span class="Number">0</span>]
+<span id="L54" class="LineNr"> 54 </span>        layer_number <span class="Red">=</span> weights<span class="Grey">.</span>shape[<span class="Number">1</span>]
+<span id="L55" class="LineNr"> 55 </span>        outputs <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">empty</span>((batch_number, layer_number))
+<span id="L56" class="LineNr"> 56 </span>        <span class="Red">for</span> b <span class="Red">in</span> <span class="Function">prange</span>(batch_number):
+<span id="L57" class="LineNr"> 57 </span>            outputs[b] <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">dot</span>(inputs[b], weights) <span class="Red">+</span> biases
+<span id="L58" class="LineNr"> 58 </span>        <span class="Statement">return</span> outputs
+<span id="L59" class="LineNr"> 59 </span>
+<span id="L60" class="LineNr"> 60 </span><span class="Statement">class</span> <span class="Structure">Layer_Conv2D</span>:
+<span id="L61" class="LineNr"> 61 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, n_filters, kernel, stride<span class="Red">=</span><span class="Number">1</span>, weight_regularizer_l1<span class="Red">=</span><span class="Number">0</span>, weight_regularizer_l2<span class="Red">=</span><span class="Number">0</span>, bias_regularizer_l1<span class="Red">=</span><span class="Number">0</span>, bias_regularizer_l2<span class="Red">=</span><span class="Number">0</span>):
+<span id="L62" class="LineNr"> 62 </span>        <span class="Identifier">self</span><span class="Grey">.</span>stride <span class="Red">=</span> stride
+<span id="L63" class="LineNr"> 63 </span>        <span class="Identifier">self</span><span class="Grey">.</span>filters <span class="Red">=</span> n_filters
+<span id="L64" class="LineNr"> 64 </span>        <span class="Identifier">self</span><span class="Grey">.</span>kernel <span class="Red">=</span> kernel
+<span id="L65" class="LineNr"> 65 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weights <span class="Red">=</span> np<span class="Grey">.</span>random<span class="Grey">.</span><span class="Function">normal</span>(<span class="Number">0</span>, <span class="Float">0.07</span>, size<span class="Red">=</span>(n_filters,<span class="Red">*</span>kernel))
+<span id="L66" class="LineNr"> 66 </span>        <span class="Identifier">self</span><span class="Grey">.</span>biases <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros</span>((<span class="Number">1</span>, n_filters))
+<span id="L67" class="LineNr"> 67 </span>        <span class="Comment">#################################################</span>
+<span id="L68" class="LineNr"> 68 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l1 <span class="Red">=</span> weight_regularizer_l1
+<span id="L69" class="LineNr"> 69 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l2 <span class="Red">=</span> weight_regularizer_l2
+<span id="L70" class="LineNr"> 70 </span>        <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l2 <span class="Red">=</span> bias_regularizer_l2
+<span id="L71" class="LineNr"> 71 </span>        <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l1 <span class="Red">=</span> bias_regularizer_l1
+<span id="L72" class="LineNr"> 72 </span>
+<span id="L73" class="LineNr"> 73 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training<span class="Red">=</span><span class="Boolean">True</span>, padding<span class="Red">=</span><span class="Number">0</span>):
+<span id="L74" class="LineNr"> 74 </span>        <span class="Red">if</span> <span class="Green">len</span>(inputs<span class="Grey">.</span>shape) <span class="Red">==</span> <span class="Number">3</span>:
+<span id="L75" class="LineNr"> 75 </span>            <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs<span class="Grey">.</span><span class="Function">reshape</span>(<span class="Number">1</span>,<span class="Red">*</span>inputs<span class="Grey">.</span>shape)
+<span id="L76" class="LineNr"> 76 </span>        <span class="Red">else</span>:
+<span id="L77" class="LineNr"> 77 </span>            <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs
+<span id="L78" class="LineNr"> 78 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">convolve2D</span>(<span class="Identifier">self</span><span class="Grey">.</span>inputs, <span class="Identifier">self</span><span class="Grey">.</span>weights)
+<span id="L79" class="LineNr"> 79 </span>
+<span id="L80" class="LineNr"> 80 </span>
+<span id="L81" class="LineNr"> 81 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L82" class="LineNr"> 82 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dbiases <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sum</span>(dvalues, axis<span class="Red">=</span>(<span class="Number">0</span>,<span class="Number">2</span>,<span class="Number">3</span>))<span class="Grey">.</span><span class="Function">reshape</span>(<span class="Red">*</span><span class="Identifier">self</span><span class="Grey">.</span>biases<span class="Grey">.</span>shape)
+<span id="L83" class="LineNr"> 83 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros</span>((dvalues<span class="Grey">.</span>shape[<span class="Number">0</span>],<span class="Red">*</span><span class="Identifier">self</span><span class="Grey">.</span>weights<span class="Grey">.</span>shape))
+<span id="L84" class="LineNr"> 84 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(<span class="Identifier">self</span><span class="Grey">.</span>inputs)
+<span id="L85" class="LineNr"> 85 </span>        drot <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">rot90</span>(dvalues, <span class="Number">2</span>, axes<span class="Red">=</span>(<span class="Number">2</span>,<span class="Number">3</span>))
+<span id="L86" class="LineNr"> 86 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">convolve2D_DWeights</span>(<span class="Identifier">self</span><span class="Grey">.</span>inputs, drot)
+<span id="L87" class="LineNr"> 87 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sum</span>(<span class="Identifier">self</span><span class="Grey">.</span>dweights, axis<span class="Red">=</span><span class="Number">0</span>)
+<span id="L88" class="LineNr"> 88 </span>        <span class="Comment">####################################################################</span>
+<span id="L89" class="LineNr"> 89 </span>        wrot <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">rot90</span>(<span class="Identifier">self</span><span class="Grey">.</span>weights, <span class="Number">2</span>, axes<span class="Red">=</span>(<span class="Number">2</span>,<span class="Number">3</span>))
+<span id="L90" class="LineNr"> 90 </span>        py <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel[<span class="Number">1</span>] <span class="Red">-</span> <span class="Number">1</span>
+<span id="L91" class="LineNr"> 91 </span>        px <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel[<span class="Number">2</span>] <span class="Red">-</span> <span class="Number">1</span>
+<span id="L92" class="LineNr"> 92 </span>        dpadded <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">pad</span>(dvalues, [(<span class="Number">0</span>,<span class="Number">0</span>),(<span class="Number">0</span>,<span class="Number">0</span>),(py,py),(px,px)])
+<span id="L93" class="LineNr"> 93 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">convolve2D_Dinputs</span>(dpadded, wrot)
+<span id="L94" class="LineNr"> 94 </span><span class="Error">        </span>
+<span id="L95" class="LineNr"> 95 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l1 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L96" class="LineNr"> 96 </span>            dL1 <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">ones_like</span>(<span class="Identifier">self</span><span class="Grey">.</span>weights)
+<span id="L97" class="LineNr"> 97 </span>            dL1[<span class="Identifier">self</span><span class="Grey">.</span>weights <span class="Red">&lt;</span> <span class="Number">0</span>] <span class="Red">=</span> <span class="Red">-</span><span class="Number">1</span>
+<span id="L98" class="LineNr"> 98 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">+=</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l1 <span class="Red">*</span> dL1
+<span id="L99" class="LineNr"> 99 </span>
+<span id="L100" class="LineNr">100 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l2 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L101" class="LineNr">101 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dweights <span class="Red">+=</span> <span class="Number">2</span> <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>weight_regularizer_l2 <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>weights
+<span id="L102" class="LineNr">102 </span>
+<span id="L103" class="LineNr">103 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l1 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L104" class="LineNr">104 </span>            dL1 <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">ones_like</span>(<span class="Identifier">self</span><span class="Grey">.</span>biases)
+<span id="L105" class="LineNr">105 </span>            dL1[<span class="Identifier">self</span><span class="Grey">.</span>biases<span class="Red">&lt;</span> <span class="Number">0</span>] <span class="Red">=</span> <span class="Red">-</span><span class="Number">1</span>
+<span id="L106" class="LineNr">106 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dbiases <span class="Red">+=</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l1 <span class="Red">*</span> dL1
+<span id="L107" class="LineNr">107 </span>
+<span id="L108" class="LineNr">108 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l2 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L109" class="LineNr">109 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dbiases <span class="Red">+=</span> <span class="Number">2</span> <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>bias_regularizer_l2 <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>biases
+<span id="L110" class="LineNr">110 </span>
+<span id="L111" class="LineNr">111 </span>    <span class="Statement">def</span> <span class="Green">get_parameters</span>(<span class="Identifier">self</span>):
+<span id="L112" class="LineNr">112 </span>        <span class="Statement">return</span> <span class="Identifier">self</span><span class="Grey">.</span>weights, <span class="Identifier">self</span><span class="Grey">.</span>biases
+<span id="L113" class="LineNr">113 </span>
+<span id="L114" class="LineNr">114 </span>    <span class="Statement">def</span> <span class="Green">set_parameters</span>(<span class="Identifier">self</span>, weights, biases):
+<span id="L115" class="LineNr">115 </span>        <span class="Identifier">self</span><span class="Grey">.</span>weights <span class="Red">=</span> weights
+<span id="L116" class="LineNr">116 </span>        <span class="Identifier">self</span><span class="Grey">.</span>biases <span class="Red">=</span> biases
+<span id="L117" class="LineNr">117 </span>
+<span id="L118" class="LineNr">118 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">staticmethod</span>
+<span id="L119" class="LineNr">119 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">njit</span>(parallel<span class="Red">=</span><span class="Boolean">True</span>, nogil<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L120" class="LineNr">120 </span>    <span class="Statement">def</span> <span class="Green">convolve2D</span>(inputs, kernel, stride<span class="Red">=</span><span class="Number">1</span>, padding<span class="Red">=</span><span class="Number">0</span>):
+<span id="L121" class="LineNr">121 </span>        outy <span class="Red">=</span> (inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">2</span>] <span class="Red">+</span> <span class="Number">2</span><span class="Red">*</span>padding <span class="Red">-</span> kernel<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">2</span>]) <span class="Red">//</span> stride <span class="Red">+</span> <span class="Number">1</span>
+<span id="L122" class="LineNr">122 </span>        outx <span class="Red">=</span> (inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">1</span>] <span class="Red">+</span> <span class="Number">2</span><span class="Red">*</span>padding <span class="Red">-</span> kernel<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">1</span>]) <span class="Red">//</span> stride <span class="Red">+</span> <span class="Number">1</span>
+<span id="L123" class="LineNr">123 </span>        batch_number <span class="Red">=</span> inputs<span class="Grey">.</span>shape[<span class="Number">0</span>]
+<span id="L124" class="LineNr">124 </span>        filter_number <span class="Red">=</span> kernel<span class="Grey">.</span>shape[<span class="Number">0</span>]
+<span id="L125" class="LineNr">125 </span>        output <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros</span>((batch_number, filter_number, outy, outx))
+<span id="L126" class="LineNr">126 </span>        <span class="Red">for</span> b <span class="Red">in</span> <span class="Function">prange</span>(batch_number):
+<span id="L127" class="LineNr">127 </span>            <span class="Red">for</span> i <span class="Red">in</span> <span class="Function">prange</span>(outy):
+<span id="L128" class="LineNr">128 </span>                ii <span class="Red">=</span> i <span class="Red">*</span> stride
+<span id="L129" class="LineNr">129 </span>                <span class="Red">for</span> j <span class="Red">in</span> <span class="Function">prange</span>(outx):
+<span id="L130" class="LineNr">130 </span>                    jj <span class="Red">=</span> j <span class="Red">*</span> stride
+<span id="L131" class="LineNr">131 </span>                    strip <span class="Red">=</span> inputs[:,:,ii:ii<span class="Red">+</span>kernel<span class="Grey">.</span>shape[<span class="Number">2</span>], jj:jj<span class="Red">+</span>kernel<span class="Grey">.</span>shape[<span class="Number">3</span>]]
+<span id="L132" class="LineNr">132 </span>                    <span class="Red">for</span> f <span class="Red">in</span> <span class="Function">prange</span>(filter_number):
+<span id="L133" class="LineNr">133 </span>                            output[b,f,i,j] <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sum</span>(kernel[f] <span class="Red">*</span> strip[b])
+<span id="L134" class="LineNr">134 </span>        <span class="Statement">return</span> output
+<span id="L135" class="LineNr">135 </span>
+<span id="L136" class="LineNr">136 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">staticmethod</span>
+<span id="L137" class="LineNr">137 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">njit</span>(parallel<span class="Red">=</span><span class="Boolean">True</span>, nogil<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L138" class="LineNr">138 </span>    <span class="Statement">def</span> <span class="Green">convolve2D_DWeights</span>(inputs, kernel, stride<span class="Red">=</span><span class="Number">1</span>, padding<span class="Red">=</span><span class="Number">0</span>):<span class="Comment">#inputs are [self.inputs, dvalues(rotated)]</span>
+<span id="L139" class="LineNr">139 </span>        outy <span class="Red">=</span> (inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">2</span>] <span class="Red">+</span> <span class="Number">2</span><span class="Red">*</span>padding <span class="Red">-</span> kernel<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">2</span>]) <span class="Red">//</span> stride <span class="Red">+</span> <span class="Number">1</span>
+<span id="L140" class="LineNr">140 </span>        outx <span class="Red">=</span> (inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">1</span>] <span class="Red">+</span> <span class="Number">2</span><span class="Red">*</span>padding <span class="Red">-</span> kernel<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">1</span>]) <span class="Red">//</span> stride <span class="Red">+</span> <span class="Number">1</span>
+<span id="L141" class="LineNr">141 </span>        batch_number <span class="Red">=</span> inputs<span class="Grey">.</span>shape[<span class="Number">0</span>]
+<span id="L142" class="LineNr">142 </span>        filter_number <span class="Red">=</span> kernel<span class="Grey">.</span>shape[<span class="Number">1</span>]
+<span id="L143" class="LineNr">143 </span>        layer_number <span class="Red">=</span> inputs<span class="Grey">.</span>shape[<span class="Number">1</span>]
+<span id="L144" class="LineNr">144 </span>        output <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros</span>((batch_number, filter_number, layer_number, outy, outx))
+<span id="L145" class="LineNr">145 </span>        <span class="Red">for</span> b <span class="Red">in</span> <span class="Function">prange</span>(batch_number):
+<span id="L146" class="LineNr">146 </span>            <span class="Red">for</span> i <span class="Red">in</span> <span class="Function">prange</span>(outy):
+<span id="L147" class="LineNr">147 </span>                ii <span class="Red">=</span> i <span class="Red">*</span> stride
+<span id="L148" class="LineNr">148 </span>                <span class="Red">for</span> j <span class="Red">in</span> <span class="Function">prange</span>(outx):
+<span id="L149" class="LineNr">149 </span>                    jj <span class="Red">=</span> j <span class="Red">*</span> stride
+<span id="L150" class="LineNr">150 </span>                    strip <span class="Red">=</span> inputs[:,:,ii:ii<span class="Red">+</span>kernel<span class="Grey">.</span>shape[<span class="Number">2</span>], jj:jj<span class="Red">+</span>kernel<span class="Grey">.</span>shape[<span class="Number">3</span>]]
+<span id="L151" class="LineNr">151 </span>                    <span class="Red">for</span> f <span class="Red">in</span> <span class="Function">prange</span>(filter_number):
+<span id="L152" class="LineNr">152 </span>                        <span class="Red">for</span> l <span class="Red">in</span> <span class="Function">prange</span>(layer_number):
+<span id="L153" class="LineNr">153 </span>                            output[b,f,l,i,j] <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sum</span>(kernel[:,f,i,j] <span class="Red">*</span> strip[b,l,i,j])
+<span id="L154" class="LineNr">154 </span>        <span class="Statement">return</span> output
+<span id="L155" class="LineNr">155 </span>
+<span id="L156" class="LineNr">156 </span>
+<span id="L157" class="LineNr">157 </span>
+<span id="L158" class="LineNr">158 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">staticmethod</span>
+<span id="L159" class="LineNr">159 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">njit</span>(parallel<span class="Red">=</span><span class="Boolean">True</span>, nogil<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L160" class="LineNr">160 </span>    <span class="Statement">def</span> <span class="Green">convolve2D_Dinputs</span>(inputs, kernel, stride<span class="Red">=</span><span class="Number">1</span>, padding<span class="Red">=</span><span class="Number">0</span>):<span class="Comment"># inputs are [dvalues(padded),self.weights(rotated)]</span>
+<span id="L161" class="LineNr">161 </span>        outy <span class="Red">=</span> (inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">2</span>] <span class="Red">+</span> <span class="Number">2</span><span class="Red">*</span>padding <span class="Red">-</span> kernel<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">2</span>]) <span class="Red">//</span> stride <span class="Red">+</span> <span class="Number">1</span>
+<span id="L162" class="LineNr">162 </span>        outx <span class="Red">=</span> (inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">1</span>] <span class="Red">+</span> <span class="Number">2</span><span class="Red">*</span>padding <span class="Red">-</span> kernel<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">1</span>]) <span class="Red">//</span> stride <span class="Red">+</span> <span class="Number">1</span>
+<span id="L163" class="LineNr">163 </span>        batch_number <span class="Red">=</span> inputs<span class="Grey">.</span>shape[<span class="Number">0</span>]
+<span id="L164" class="LineNr">164 </span>        filter_number <span class="Red">=</span> kernel<span class="Grey">.</span>shape[<span class="Number">0</span>]
+<span id="L165" class="LineNr">165 </span>        layer_number <span class="Red">=</span> kernel<span class="Grey">.</span>shape[<span class="Number">1</span>]
+<span id="L166" class="LineNr">166 </span>        output <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros</span>((batch_number, layer_number, outy, outx))
+<span id="L167" class="LineNr">167 </span>        <span class="Red">for</span> b <span class="Red">in</span> <span class="Function">prange</span>(batch_number):
+<span id="L168" class="LineNr">168 </span>            <span class="Red">for</span> i <span class="Red">in</span> <span class="Function">prange</span>(outy):
+<span id="L169" class="LineNr">169 </span>                ii <span class="Red">=</span> i <span class="Red">*</span> stride
+<span id="L170" class="LineNr">170 </span>                <span class="Red">for</span> j <span class="Red">in</span> <span class="Function">prange</span>(outx):
+<span id="L171" class="LineNr">171 </span>                    jj <span class="Red">=</span> j <span class="Red">*</span> stride
+<span id="L172" class="LineNr">172 </span>                    strip <span class="Red">=</span> inputs[:,:,ii:ii<span class="Red">+</span>kernel<span class="Grey">.</span>shape[<span class="Number">2</span>], jj:jj<span class="Red">+</span>kernel<span class="Grey">.</span>shape[<span class="Number">3</span>]]
+<span id="L173" class="LineNr">173 </span>                    <span class="Red">for</span> l <span class="Red">in</span> <span class="Function">prange</span>(layer_number):
+<span id="L174" class="LineNr">174 </span>                            output[b,l,i,j] <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sum</span>(kernel[:,l] <span class="Red">*</span> strip[b])
+<span id="L175" class="LineNr">175 </span>        <span class="Statement">return</span> output
+<span id="L176" class="LineNr">176 </span>
+<span id="L177" class="LineNr">177 </span><span class="Statement">class</span> <span class="Structure">Layer_Maxpooling</span>:
+<span id="L178" class="LineNr">178 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, kernel<span class="Red">=</span><span class="Number">2</span>):
+<span id="L179" class="LineNr">179 </span>        <span class="Identifier">self</span><span class="Grey">.</span>kernel <span class="Red">=</span> kernel
+<span id="L180" class="LineNr">180 </span>
+<span id="L181" class="LineNr">181 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L182" class="LineNr">182 </span>        <span class="Identifier">self</span><span class="Grey">.</span>Y <span class="Red">=</span> ((inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">2</span>] <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel) <span class="Red">//</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel) <span class="Red">+</span> <span class="Number">1</span>
+<span id="L183" class="LineNr">183 </span>        <span class="Identifier">self</span><span class="Grey">.</span>X <span class="Red">=</span> ((inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">1</span>] <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel) <span class="Red">//</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel) <span class="Red">+</span> <span class="Number">1</span>
+<span id="L184" class="LineNr">184 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(inputs)
+<span id="L185" class="LineNr">185 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros</span>((inputs<span class="Grey">.</span>shape[<span class="Number">0</span>], inputs<span class="Grey">.</span>shape[<span class="Red">-</span><span class="Number">3</span>], <span class="Identifier">self</span><span class="Grey">.</span>Y, <span class="Identifier">self</span><span class="Grey">.</span>X))
+<span id="L186" class="LineNr">186 </span>        <span class="Red">for</span> i <span class="Red">in</span> <span class="Green">range</span>(<span class="Identifier">self</span><span class="Grey">.</span>Y):
+<span id="L187" class="LineNr">187 </span>            ii <span class="Red">=</span> i <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel
+<span id="L188" class="LineNr">188 </span>            <span class="Red">for</span> j <span class="Red">in</span> <span class="Green">range</span>(<span class="Identifier">self</span><span class="Grey">.</span>X):
+<span id="L189" class="LineNr">189 </span>                jj <span class="Red">=</span> j <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel
+<span id="L190" class="LineNr">190 </span>                strip <span class="Red">=</span> inputs[:,:, ii:ii<span class="Red">+</span><span class="Identifier">self</span><span class="Grey">.</span>kernel, jj:jj<span class="Red">+</span><span class="Identifier">self</span><span class="Grey">.</span>kernel]
+<span id="L191" class="LineNr">191 </span>                maxx <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">amax</span>(strip, axis<span class="Red">=</span>(<span class="Number">2</span>,<span class="Number">3</span>))
+<span id="L192" class="LineNr">192 </span>                eva <span class="Red">=</span> ((np<span class="Grey">.</span><span class="Function">sum</span>((strip <span class="Red">==</span> maxx[:,:,<span class="OrangeItalic">None</span>,<span class="OrangeItalic">None</span>])<span class="Red">*</span><span class="Number">1</span>,axis<span class="Red">=</span>(<span class="Number">2</span>,<span class="Number">3</span>)) <span class="Red">-</span> <span class="Number">1</span>) <span class="Red">==</span> <span class="Number">0</span>) <span class="Red">*</span> <span class="Number">1</span>
+<span id="L193" class="LineNr">193 </span>                adder <span class="Red">=</span> ((strip <span class="Red">==</span> maxx[:,:,<span class="OrangeItalic">None</span>,<span class="OrangeItalic">None</span>])<span class="Red">*</span><span class="Number">1</span>)<span class="Red">*</span>eva[:,:,<span class="OrangeItalic">None</span>,<span class="OrangeItalic">None</span>]
+<span id="L194" class="LineNr">194 </span>                <span class="Identifier">self</span><span class="Grey">.</span>output[:,:,i,j] <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">amax</span>(strip,axis<span class="Red">=</span>(<span class="Number">2</span>,<span class="Number">3</span>))
+<span id="L195" class="LineNr">195 </span>                <span class="Identifier">self</span><span class="Grey">.</span>inputs[:,:,ii:ii<span class="Red">+</span><span class="Identifier">self</span><span class="Grey">.</span>kernel, jj:jj<span class="Red">+</span><span class="Identifier">self</span><span class="Grey">.</span>kernel] <span class="Red">+=</span> adder
+<span id="L196" class="LineNr">196 </span>
+<span id="L197" class="LineNr">197 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L198" class="LineNr">198 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>inputs
+<span id="L199" class="LineNr">199 </span>        <span class="Red">for</span> i <span class="Red">in</span> <span class="Green">range</span>(<span class="Identifier">self</span><span class="Grey">.</span>Y):
+<span id="L200" class="LineNr">200 </span>            ii <span class="Red">=</span> i <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel
+<span id="L201" class="LineNr">201 </span>            <span class="Red">for</span> j <span class="Red">in</span> <span class="Green">range</span>(<span class="Identifier">self</span><span class="Grey">.</span>X):
+<span id="L202" class="LineNr">202 </span>                jj <span class="Red">=</span> j <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>kernel
+<span id="L203" class="LineNr">203 </span>                <span class="Identifier">self</span><span class="Grey">.</span>dinputs[:,:, ii:ii<span class="Red">+</span><span class="Identifier">self</span><span class="Grey">.</span>kernel, jj:jj<span class="Red">+</span><span class="Identifier">self</span><span class="Grey">.</span>kernel] <span class="Red">*=</span> dvalues[:,:,i,j][:,:,<span class="OrangeItalic">None</span>,<span class="OrangeItalic">None</span>]
+<span id="L204" class="LineNr">204 </span>
+<span id="L205" class="LineNr">205 </span><span class="Statement">class</span> <span class="Structure">Layer_Flattening</span>:
+<span id="L206" class="LineNr">206 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L207" class="LineNr">207 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs_shape <span class="Red">=</span> inputs<span class="Grey">.</span>shape
+<span id="L208" class="LineNr">208 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> inputs<span class="Grey">.</span><span class="Function">reshape</span>(inputs<span class="Grey">.</span>shape[<span class="Number">0</span>], <span class="Red">-</span><span class="Number">1</span>)
+<span id="L209" class="LineNr">209 </span>
+<span id="L210" class="LineNr">210 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L211" class="LineNr">211 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> dvalues<span class="Grey">.</span><span class="Function">reshape</span>(<span class="Identifier">self</span><span class="Grey">.</span>inputs_shape)
+<span id="L212" class="LineNr">212 </span>
+<span id="L213" class="LineNr">213 </span><span class="Statement">class</span> <span class="Structure">Layer_Dropout</span>:
+<span id="L214" class="LineNr">214 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, rate):
+<span id="L215" class="LineNr">215 </span>        <span class="Identifier">self</span><span class="Grey">.</span>rate <span class="Red">=</span> <span class="Number">1</span> <span class="Red">-</span> rate
+<span id="L216" class="LineNr">216 </span>
+<span id="L217" class="LineNr">217 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L218" class="LineNr">218 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs
+<span id="L219" class="LineNr">219 </span>
+<span id="L220" class="LineNr">220 </span>        <span class="Red">if</span> <span class="Red">not</span> training:
+<span id="L221" class="LineNr">221 </span>            <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> inputs<span class="Grey">.</span><span class="Function">copy</span>()
+<span id="L222" class="LineNr">222 </span>            <span class="Statement">return</span>
+<span id="L223" class="LineNr">223 </span><span class="Error">        </span>
+<span id="L224" class="LineNr">224 </span>        <span class="Identifier">self</span><span class="Grey">.</span>binary_mask <span class="Red">=</span> np<span class="Grey">.</span>random<span class="Grey">.</span><span class="Function">binomial</span>(<span class="Number">1</span>, <span class="Identifier">self</span><span class="Grey">.</span>rate, size<span class="Red">=</span>inputs<span class="Grey">.</span>shape) <span class="Red">/</span> <span class="Identifier">self</span><span class="Grey">.</span>rate
+<span id="L225" class="LineNr">225 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> inputs <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>binary_mask
+<span id="L226" class="LineNr">226 </span>
+<span id="L227" class="LineNr">227 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L228" class="LineNr">228 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> dvalues <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>binary_mask
+<span id="L229" class="LineNr">229 </span>
+<span id="L230" class="LineNr">230 </span><span class="Statement">class</span> <span class="Structure">Layer_Input</span>:
+<span id="L231" class="LineNr">231 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L232" class="LineNr">232 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> inputs
+<span id="L233" class="LineNr">233 </span><span class="Error">        </span>
+<span id="L234" class="LineNr">234 </span><span class="Statement">class</span> <span class="Structure">Activation_RelU</span>:
+<span id="L235" class="LineNr">235 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L236" class="LineNr">236 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs
+<span id="L237" class="LineNr">237 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">maximum</span>(<span class="Number">0</span>, inputs)
+<span id="L238" class="LineNr">238 </span>
+<span id="L239" class="LineNr">239 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L240" class="LineNr">240 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> dvalues<span class="Grey">.</span><span class="Function">copy</span>()
+<span id="L241" class="LineNr">241 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs[<span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">&lt;=</span> <span class="Number">0</span>] <span class="Red">=</span> <span class="Number">0</span>
+<span id="L242" class="LineNr">242 </span>
+<span id="L243" class="LineNr">243 </span>    <span class="Statement">def</span> <span class="Green">predictions</span>(<span class="Identifier">self</span>, output):
+<span id="L244" class="LineNr">244 </span>        <span class="Statement">return</span> output
+<span id="L245" class="LineNr">245 </span>
+<span id="L246" class="LineNr">246 </span><span class="Statement">class</span> <span class="Structure">Activation_Softmax</span>:
+<span id="L247" class="LineNr">247 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L248" class="LineNr">248 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs
+<span id="L249" class="LineNr">249 </span>        exp_values <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">exp</span>(inputs <span class="Red">-</span> np<span class="Grey">.</span><span class="Function">max</span>(inputs, axis<span class="Red">=</span><span class="Number">1</span>, keepdims<span class="Red">=</span><span class="Boolean">True</span>))
+<span id="L250" class="LineNr">250 </span>        probabilities <span class="Red">=</span> exp_values <span class="Red">/</span> np<span class="Grey">.</span><span class="Function">sum</span>(exp_values, axis<span class="Red">=</span><span class="Number">1</span>, keepdims<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L251" class="LineNr">251 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> probabilities
+<span id="L252" class="LineNr">252 </span>
+<span id="L253" class="LineNr">253 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L254" class="LineNr">254 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs<span class="Red">=</span> np<span class="Grey">.</span><span class="Function">empty_like</span>(dvalues)
+<span id="L255" class="LineNr">255 </span>        <span class="Red">for</span> index, (single_output, single_dvalues) <span class="Red">in</span> <span class="Green">enumerate</span>(<span class="Green">zip</span>(<span class="Identifier">self</span><span class="Grey">.</span>output, dvalues)):
+<span id="L256" class="LineNr">256 </span>            single_output <span class="Red">=</span> single_output<span class="Grey">.</span><span class="Function">reshape</span>(<span class="Red">-</span><span class="Number">1</span>,<span class="Number">1</span>)
+<span id="L257" class="LineNr">257 </span>            jacobian_matrix <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">diagflat</span>(single_output) <span class="Red">-</span> np<span class="Grey">.</span><span class="Function">dot</span>(single_output, single_output<span class="Grey">.</span>T)
+<span id="L258" class="LineNr">258 </span>            <span class="Identifier">self</span><span class="Grey">.</span>dinputs[index] <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">dot</span>(jacobian_matrix, single_dvalues)
+<span id="L259" class="LineNr">259 </span>
+<span id="L260" class="LineNr">260 </span>    <span class="Statement">def</span> <span class="Green">reversed</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L261" class="LineNr">261 </span>        <span class="Statement">pass</span>
+<span id="L262" class="LineNr">262 </span>
+<span id="L263" class="LineNr">263 </span>    <span class="Statement">def</span> <span class="Green">predictions</span>(<span class="Identifier">self</span>, output):
+<span id="L264" class="LineNr">264 </span>        <span class="Statement">return</span> np<span class="Grey">.</span><span class="Function">argmax</span>(output, axis<span class="Red">=</span><span class="Number">1</span>)
+<span id="L265" class="LineNr">265 </span>
+<span id="L266" class="LineNr">266 </span><span class="Statement">class</span> <span class="Structure">Activation_Sigmoid</span>:
+<span id="L267" class="LineNr">267 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L268" class="LineNr">268 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs
+<span id="L269" class="LineNr">269 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> <span class="Number">1</span> <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">+</span> np<span class="Grey">.</span><span class="Function">exp</span>(<span class="Red">-</span>inputs))
+<span id="L270" class="LineNr">270 </span>
+<span id="L271" class="LineNr">271 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L272" class="LineNr">272 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> dvalues <span class="Red">*</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>output) <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>output
+<span id="L273" class="LineNr">273 </span><span class="Error">        </span>
+<span id="L274" class="LineNr">274 </span>    <span class="Statement">def</span> <span class="Green">predictions</span>(<span class="Identifier">self</span>, output):
+<span id="L275" class="LineNr">275 </span>        <span class="Statement">return</span> (output <span class="Red">&gt;</span> <span class="Float">0.5</span>) <span class="Red">*</span> <span class="Number">1</span>
+<span id="L276" class="LineNr">276 </span>
+<span id="L277" class="LineNr">277 </span><span class="Statement">class</span> <span class="Structure">Activation_Linear</span>:
+<span id="L278" class="LineNr">278 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, inputs, training):
+<span id="L279" class="LineNr">279 </span>        <span class="Identifier">self</span><span class="Grey">.</span>inputs <span class="Red">=</span> inputs
+<span id="L280" class="LineNr">280 </span>        <span class="Identifier">self</span><span class="Grey">.</span>output <span class="Red">=</span> inputs
+<span id="L281" class="LineNr">281 </span>
+<span id="L282" class="LineNr">282 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues):
+<span id="L283" class="LineNr">283 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> dvalues<span class="Grey">.</span><span class="Function">copy</span>()
+<span id="L284" class="LineNr">284 </span>
+<span id="L285" class="LineNr">285 </span>    <span class="Statement">def</span> <span class="Green">predictions</span>(<span class="Identifier">self</span>, output):
+<span id="L286" class="LineNr">286 </span>        <span class="Statement">return</span> output
+<span id="L287" class="LineNr">287 </span>
+<span id="L288" class="LineNr">288 </span><span class="Statement">class</span> <span class="Structure">Optimizer_SGD</span>:
+<span id="L289" class="LineNr">289 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, learning_rate<span class="Red">=</span><span class="Number">1</span>, decay<span class="Red">=</span><span class="Number">0</span>, momentum<span class="Red">=</span><span class="Number">0</span>):
+<span id="L290" class="LineNr">290 </span>        <span class="Identifier">self</span><span class="Grey">.</span>learning_rate<span class="Red">=</span> learning_rate
+<span id="L291" class="LineNr">291 </span>        <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> learning_rate
+<span id="L292" class="LineNr">292 </span>        <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">=</span> decay
+<span id="L293" class="LineNr">293 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">=</span> <span class="Number">0</span>
+<span id="L294" class="LineNr">294 </span>        <span class="Identifier">self</span><span class="Grey">.</span>momentum <span class="Red">=</span> momentum
+<span id="L295" class="LineNr">295 </span>
+<span id="L296" class="LineNr">296 </span>    <span class="Statement">def</span> <span class="Green">pre_update_params</span>(<span class="Identifier">self</span>):
+<span id="L297" class="LineNr">297 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>decay:
+<span id="L298" class="LineNr">298 </span>            <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>learning_rate <span class="Red">*</span> (<span class="Number">1</span> <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>iterations))
+<span id="L299" class="LineNr">299 </span>
+<span id="L300" class="LineNr">300 </span>    <span class="Statement">def</span> <span class="Green">update_params</span>(<span class="Identifier">self</span>, layer):
+<span id="L301" class="LineNr">301 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>momentum:
+<span id="L302" class="LineNr">302 </span>            <span class="Red">if</span> <span class="Red">not</span> <span class="Green">hasattr</span>(layer, <span class="String">'weight_momentums'</span>):
+<span id="L303" class="LineNr">303 </span>                layer<span class="Grey">.</span>weight_momentums <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>weights)
+<span id="L304" class="LineNr">304 </span>                layer<span class="Grey">.</span>bias_momentums <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>biases)
+<span id="L305" class="LineNr">305 </span>            weight_updates <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>momentum <span class="Red">*</span> layer<span class="Grey">.</span>weight_momentums <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dweights
+<span id="L306" class="LineNr">306 </span>            layer<span class="Grey">.</span>weight_momentums <span class="Red">=</span> weight_updates
+<span id="L307" class="LineNr">307 </span>            bias_updates <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>momentum <span class="Red">*</span> layer<span class="Grey">.</span>bias_momentums <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dbiases
+<span id="L308" class="LineNr">308 </span>            layer<span class="Grey">.</span>bias_momentums <span class="Red">=</span> bias_updates
+<span id="L309" class="LineNr">309 </span>        <span class="Red">else</span>:
+<span id="L310" class="LineNr">310 </span>            weight_updates <span class="Red">=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dweights
+<span id="L311" class="LineNr">311 </span>            bias_updates <span class="Red">=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dbiases
+<span id="L312" class="LineNr">312 </span>        layer<span class="Grey">.</span>weights <span class="Red">+=</span> weight_updates
+<span id="L313" class="LineNr">313 </span>        layer<span class="Grey">.</span>biases <span class="Red">+=</span> bias_updates
+<span id="L314" class="LineNr">314 </span><span class="Error">        </span>
+<span id="L315" class="LineNr">315 </span>
+<span id="L316" class="LineNr">316 </span>    <span class="Statement">def</span> <span class="Green">post_update_params</span>(<span class="Identifier">self</span>):
+<span id="L317" class="LineNr">317 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L318" class="LineNr">318 </span>
+<span id="L319" class="LineNr">319 </span><span class="Statement">class</span> <span class="Structure">Optimizer_Adagrad</span>:
+<span id="L320" class="LineNr">320 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, learning_rate<span class="Red">=</span><span class="Number">1</span>, decay<span class="Red">=</span><span class="Number">0</span>, epsilon<span class="Red">=</span><span class="Float">1e-7</span>):
+<span id="L321" class="LineNr">321 </span>        <span class="Identifier">self</span><span class="Grey">.</span>learning_rate<span class="Red">=</span> learning_rate
+<span id="L322" class="LineNr">322 </span>        <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> learning_rate
+<span id="L323" class="LineNr">323 </span>        <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">=</span> decay
+<span id="L324" class="LineNr">324 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">=</span> <span class="Number">0</span>
+<span id="L325" class="LineNr">325 </span>        <span class="Identifier">self</span><span class="Grey">.</span>epsilon <span class="Red">=</span> epsilon
+<span id="L326" class="LineNr">326 </span>
+<span id="L327" class="LineNr">327 </span>    <span class="Statement">def</span> <span class="Green">pre_update_params</span>(<span class="Identifier">self</span>):
+<span id="L328" class="LineNr">328 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>decay:
+<span id="L329" class="LineNr">329 </span>            <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>learning_rate <span class="Red">*</span> (<span class="Number">1</span> <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>iterations))
+<span id="L330" class="LineNr">330 </span>
+<span id="L331" class="LineNr">331 </span>    <span class="Statement">def</span> <span class="Green">update_params</span>(<span class="Identifier">self</span>, layer):
+<span id="L332" class="LineNr">332 </span>        <span class="Red">if</span> <span class="Red">not</span> <span class="Green">hasattr</span>(layer, <span class="String">'weight_cache'</span>):
+<span id="L333" class="LineNr">333 </span>            layer<span class="Grey">.</span>weight_cache <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>weights)
+<span id="L334" class="LineNr">334 </span>            layer<span class="Grey">.</span>bias_cache <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>biases)
+<span id="L335" class="LineNr">335 </span>        layer<span class="Grey">.</span>weight_cache <span class="Red">+=</span> layer<span class="Grey">.</span>dweights<span class="Red">**</span><span class="Number">2</span>
+<span id="L336" class="LineNr">336 </span>        layer<span class="Grey">.</span>bias_cache <span class="Red">+=</span> layer<span class="Grey">.</span>dbiases<span class="Red">**</span><span class="Number">2</span>
+<span id="L337" class="LineNr">337 </span>        layer<span class="Grey">.</span>weights <span class="Red">+=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dweights <span class="Red">/</span> (np<span class="Grey">.</span><span class="Function">sqrt</span>(layer<span class="Grey">.</span>weight_cache) <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>epsilon)
+<span id="L338" class="LineNr">338 </span>        layer<span class="Grey">.</span>biases <span class="Red">+=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dbiases <span class="Red">/</span> (np<span class="Grey">.</span><span class="Function">sqrt</span>(layer<span class="Grey">.</span>bias_cache) <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>epsilon)
+<span id="L339" class="LineNr">339 </span>
+<span id="L340" class="LineNr">340 </span>    <span class="Statement">def</span> <span class="Green">post_update_params</span>(<span class="Identifier">self</span>):
+<span id="L341" class="LineNr">341 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L342" class="LineNr">342 </span>
+<span id="L343" class="LineNr">343 </span><span class="Statement">class</span> <span class="Structure">Optimizer_RMSprop</span>:
+<span id="L344" class="LineNr">344 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, learning_rate<span class="Red">=</span><span class="Float">1e-3</span>, decay<span class="Red">=</span><span class="Number">0</span>, epsilon<span class="Red">=</span><span class="Float">1e-7</span>, rho<span class="Red">=</span><span class="Float">0.9</span>):
+<span id="L345" class="LineNr">345 </span>        <span class="Identifier">self</span><span class="Grey">.</span>learning_rate<span class="Red">=</span> learning_rate
+<span id="L346" class="LineNr">346 </span>        <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> learning_rate
+<span id="L347" class="LineNr">347 </span>        <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">=</span> decay
+<span id="L348" class="LineNr">348 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">=</span> <span class="Number">0</span>
+<span id="L349" class="LineNr">349 </span>        <span class="Identifier">self</span><span class="Grey">.</span>epsilon <span class="Red">=</span> epsilon
+<span id="L350" class="LineNr">350 </span>        <span class="Identifier">self</span><span class="Grey">.</span>rho <span class="Red">=</span> rho
+<span id="L351" class="LineNr">351 </span>
+<span id="L352" class="LineNr">352 </span>    <span class="Statement">def</span> <span class="Green">pre_update_params</span>(<span class="Identifier">self</span>):
+<span id="L353" class="LineNr">353 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>decay:
+<span id="L354" class="LineNr">354 </span>            <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>learning_rate <span class="Red">*</span> (<span class="Number">1</span> <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>iterations))
+<span id="L355" class="LineNr">355 </span>
+<span id="L356" class="LineNr">356 </span>    <span class="Statement">def</span> <span class="Green">update_params</span>(<span class="Identifier">self</span>, layer):
+<span id="L357" class="LineNr">357 </span>        <span class="Red">if</span> <span class="Red">not</span> <span class="Green">hasattr</span>(layer, <span class="String">'weight_cache'</span>):
+<span id="L358" class="LineNr">358 </span>            layer<span class="Grey">.</span>weight_cache <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>weights)
+<span id="L359" class="LineNr">359 </span>            layer<span class="Grey">.</span>bias_cache <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>biases)
+<span id="L360" class="LineNr">360 </span>        layer<span class="Grey">.</span>weight_cache <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>rho <span class="Red">*</span> layer<span class="Grey">.</span>weight_cache <span class="Red">+</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>rho) <span class="Red">*</span> layer<span class="Grey">.</span>dweights<span class="Red">**</span><span class="Number">2</span>
+<span id="L361" class="LineNr">361 </span>        layer<span class="Grey">.</span>bias_cache <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>rho <span class="Red">*</span> layer<span class="Grey">.</span>bias_cache <span class="Red">+</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>rho) <span class="Red">*</span> layer<span class="Grey">.</span>dbiases<span class="Red">**</span><span class="Number">2</span>
+<span id="L362" class="LineNr">362 </span>        layer<span class="Grey">.</span>weights <span class="Red">+=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dweights <span class="Red">/</span> (np<span class="Grey">.</span><span class="Function">sqrt</span>(layer<span class="Grey">.</span>weight_cache) <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>epsilon)
+<span id="L363" class="LineNr">363 </span>        layer<span class="Grey">.</span>biases <span class="Red">+=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> layer<span class="Grey">.</span>dbiases <span class="Red">/</span> (np<span class="Grey">.</span><span class="Function">sqrt</span>(layer<span class="Grey">.</span>bias_cache) <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>epsilon)
+<span id="L364" class="LineNr">364 </span>
+<span id="L365" class="LineNr">365 </span>    <span class="Statement">def</span> <span class="Green">post_update_params</span>(<span class="Identifier">self</span>):
+<span id="L366" class="LineNr">366 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L367" class="LineNr">367 </span>
+<span id="L368" class="LineNr">368 </span><span class="Statement">class</span> <span class="Structure">Optimizer_Adam</span>:
+<span id="L369" class="LineNr">369 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, learning_rate<span class="Red">=</span><span class="Float">1e-3</span>, decay<span class="Red">=</span><span class="Number">0</span>, epsilon<span class="Red">=</span><span class="Float">1e-7</span>, beta_1<span class="Red">=</span><span class="Float">0.9</span>, beta_2<span class="Red">=</span><span class="Float">0.999</span>):
+<span id="L370" class="LineNr">370 </span>        <span class="Identifier">self</span><span class="Grey">.</span>learning_rate<span class="Red">=</span> learning_rate
+<span id="L371" class="LineNr">371 </span>        <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> learning_rate
+<span id="L372" class="LineNr">372 </span>        <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">=</span> decay
+<span id="L373" class="LineNr">373 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">=</span> <span class="Number">0</span>
+<span id="L374" class="LineNr">374 </span>        <span class="Identifier">self</span><span class="Grey">.</span>epsilon <span class="Red">=</span> epsilon
+<span id="L375" class="LineNr">375 </span>        <span class="Identifier">self</span><span class="Grey">.</span>beta_1 <span class="Red">=</span> beta_1
+<span id="L376" class="LineNr">376 </span>        <span class="Identifier">self</span><span class="Grey">.</span>beta_2 <span class="Red">=</span> beta_2
+<span id="L377" class="LineNr">377 </span>
+<span id="L378" class="LineNr">378 </span>    <span class="Statement">def</span> <span class="Green">pre_update_params</span>(<span class="Identifier">self</span>):
+<span id="L379" class="LineNr">379 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>decay:
+<span id="L380" class="LineNr">380 </span>            <span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>learning_rate <span class="Red">*</span> (<span class="Number">1</span> <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>decay <span class="Red">*</span> <span class="Identifier">self</span><span class="Grey">.</span>iterations))
+<span id="L381" class="LineNr">381 </span>
+<span id="L382" class="LineNr">382 </span>    <span class="Statement">def</span> <span class="Green">update_params</span>(<span class="Identifier">self</span>, layer):
+<span id="L383" class="LineNr">383 </span>        <span class="Red">if</span> <span class="Red">not</span> <span class="Green">hasattr</span>(layer, <span class="String">'weight_cache'</span>):
+<span id="L384" class="LineNr">384 </span>            layer<span class="Grey">.</span>weight_momentums <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>weights)
+<span id="L385" class="LineNr">385 </span>            layer<span class="Grey">.</span>bias_momentums <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>biases)
+<span id="L386" class="LineNr">386 </span>            layer<span class="Grey">.</span>weight_cache <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>weights)
+<span id="L387" class="LineNr">387 </span>            layer<span class="Grey">.</span>bias_cache <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">zeros_like</span>(layer<span class="Grey">.</span>biases)
+<span id="L388" class="LineNr">388 </span>        layer<span class="Grey">.</span>weight_momentums <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_1 <span class="Red">*</span> layer<span class="Grey">.</span>weight_momentums <span class="Red">+</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_1) <span class="Red">*</span> layer<span class="Grey">.</span>dweights
+<span id="L389" class="LineNr">389 </span>        layer<span class="Grey">.</span>bias_momentums <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_1 <span class="Red">*</span> layer<span class="Grey">.</span>bias_momentums <span class="Red">+</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_1) <span class="Red">*</span> layer<span class="Grey">.</span>dbiases
+<span id="L390" class="LineNr">390 </span>        weight_momentums_corrected <span class="Red">=</span> layer<span class="Grey">.</span>weight_momentums <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_1 <span class="Red">**</span> (<span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+</span> <span class="Number">1</span>))<span class="Error"> </span>
+<span id="L391" class="LineNr">391 </span>        bias_momentums_corrected <span class="Red">=</span> layer<span class="Grey">.</span>bias_momentums <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_1 <span class="Red">**</span> (<span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+</span> <span class="Number">1</span>))<span class="Error"> </span>
+<span id="L392" class="LineNr">392 </span>        layer<span class="Grey">.</span>weight_cache <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_2 <span class="Red">*</span> layer<span class="Grey">.</span>weight_cache <span class="Red">+</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_2) <span class="Red">*</span> layer<span class="Grey">.</span>dweights<span class="Red">**</span><span class="Number">2</span>
+<span id="L393" class="LineNr">393 </span>        layer<span class="Grey">.</span>bias_cache <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_2 <span class="Red">*</span> layer<span class="Grey">.</span>bias_cache <span class="Red">+</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_2) <span class="Red">*</span> layer<span class="Grey">.</span>dbiases<span class="Red">**</span><span class="Number">2</span>
+<span id="L394" class="LineNr">394 </span>        weight_cache_corrected <span class="Red">=</span> layer<span class="Grey">.</span>weight_cache <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_2 <span class="Red">**</span> (<span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+</span><span class="Number">1</span>))<span class="Error"> </span>
+<span id="L395" class="LineNr">395 </span>        bias_cache_corrected <span class="Red">=</span> layer<span class="Grey">.</span>bias_cache <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">-</span> <span class="Identifier">self</span><span class="Grey">.</span>beta_2 <span class="Red">**</span> (<span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+</span><span class="Number">1</span>))<span class="Error"> </span>
+<span id="L396" class="LineNr">396 </span>        layer<span class="Grey">.</span>weights <span class="Red">+=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> weight_momentums_corrected <span class="Red">/</span> (np<span class="Grey">.</span><span class="Function">sqrt</span>(weight_cache_corrected) <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>epsilon)
+<span id="L397" class="LineNr">397 </span>        layer<span class="Grey">.</span>biases <span class="Red">+=</span> <span class="Red">-</span><span class="Identifier">self</span><span class="Grey">.</span>current_learning_rate <span class="Red">*</span> bias_momentums_corrected <span class="Red">/</span> (np<span class="Grey">.</span><span class="Function">sqrt</span>(bias_cache_corrected) <span class="Red">+</span> <span class="Identifier">self</span><span class="Grey">.</span>epsilon)
+<span id="L398" class="LineNr">398 </span>
+<span id="L399" class="LineNr">399 </span>    <span class="Statement">def</span> <span class="Green">post_update_params</span>(<span class="Identifier">self</span>):
+<span id="L400" class="LineNr">400 </span>        <span class="Identifier">self</span><span class="Grey">.</span>iterations <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L401" class="LineNr">401 </span>
+<span id="L402" class="LineNr">402 </span><span class="Statement">class</span> <span class="Structure">Loss</span>:
+<span id="L403" class="LineNr">403 </span>    <span class="Statement">def</span> <span class="Green">regularization_loss</span>(<span class="Identifier">self</span>):
+<span id="L404" class="LineNr">404 </span>        regularization_loss <span class="Red">=</span> <span class="Number">0</span>
+<span id="L405" class="LineNr">405 </span>        <span class="Red">for</span> layer <span class="Red">in</span> <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers:
+<span id="L406" class="LineNr">406 </span>            <span class="Red">if</span> layer<span class="Grey">.</span>weight_regularizer_l1 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L407" class="LineNr">407 </span>                regularization_loss <span class="Red">+=</span> layer<span class="Grey">.</span>weight_regularizer_l1 <span class="Red">*</span> np<span class="Grey">.</span><span class="Function">sum</span>(np<span class="Grey">.</span><span class="Function">abs</span>(layer<span class="Grey">.</span>weights))
+<span id="L408" class="LineNr">408 </span>            <span class="Red">if</span> layer<span class="Grey">.</span>weight_regularizer_l2 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L409" class="LineNr">409 </span>                regularization_loss <span class="Red">+=</span> layer<span class="Grey">.</span>weight_regularizer_l2 <span class="Red">*</span> np<span class="Grey">.</span><span class="Function">sum</span>(layer<span class="Grey">.</span>weights <span class="Red">*</span> layer<span class="Grey">.</span>weights)
+<span id="L410" class="LineNr">410 </span>            <span class="Red">if</span> layer<span class="Grey">.</span>bias_regularizer_l1 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L411" class="LineNr">411 </span>                regularization_loss <span class="Red">+=</span> layer<span class="Grey">.</span>bias_regularizer_l1 <span class="Red">*</span> np<span class="Grey">.</span><span class="Function">sum</span>(np<span class="Grey">.</span><span class="Function">abs</span>(layer<span class="Grey">.</span>biases))
+<span id="L412" class="LineNr">412 </span>            <span class="Red">if</span> layer<span class="Grey">.</span>bias_regularizer_l2 <span class="Red">&gt;</span> <span class="Number">0</span>:
+<span id="L413" class="LineNr">413 </span>                regularization_loss <span class="Red">+=</span> layer<span class="Grey">.</span>bias_regularizer_l2 <span class="Red">*</span> np<span class="Grey">.</span><span class="Function">sum</span>(layer<span class="Grey">.</span>biases <span class="Red">*</span> layer<span class="Grey">.</span>biases)
+<span id="L414" class="LineNr">414 </span>        <span class="Statement">return</span> regularization_loss
+<span id="L415" class="LineNr">415 </span>
+<span id="L416" class="LineNr">416 </span>    <span class="Statement">def</span> <span class="Green">remember_trainable_layers</span>(<span class="Identifier">self</span>, trainable_layers):
+<span id="L417" class="LineNr">417 </span>        <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers <span class="Red">=</span> trainable_layers<span class="Error">    </span>
+<span id="L418" class="LineNr">418 </span>
+<span id="L419" class="LineNr">419 </span>    <span class="Statement">def</span> <span class="Green">calculate</span>(<span class="Identifier">self</span>, output, y, <span class="Red">*</span>, include_regulariztion<span class="Red">=</span><span class="Boolean">False</span>):
+<span id="L420" class="LineNr">420 </span>        sample_losses <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">forward</span>(output, y)
+<span id="L421" class="LineNr">421 </span>        data_loss <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">mean</span>(sample_losses)
+<span id="L422" class="LineNr">422 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_sum <span class="Red">+=</span> np<span class="Grey">.</span><span class="Function">sum</span>(sample_losses)
+<span id="L423" class="LineNr">423 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_count <span class="Red">+=</span> <span class="Green">len</span>(sample_losses)
+<span id="L424" class="LineNr">424 </span>        <span class="Red">if</span> <span class="Red">not</span> include_regulariztion:
+<span id="L425" class="LineNr">425 </span>            <span class="Statement">return</span> data_loss
+<span id="L426" class="LineNr">426 </span>        <span class="Statement">return</span> data_loss, <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">regularization_loss</span>()
+<span id="L427" class="LineNr">427 </span>
+<span id="L428" class="LineNr">428 </span>    <span class="Statement">def</span> <span class="Green">calculate_accumulated</span>(<span class="Identifier">self</span>, <span class="Red">*</span>, include_regulariztion<span class="Red">=</span><span class="Boolean">False</span>):
+<span id="L429" class="LineNr">429 </span>        data_loss <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accumulated_sum <span class="Red">/</span> <span class="Identifier">self</span><span class="Grey">.</span>accumulated_count
+<span id="L430" class="LineNr">430 </span>        <span class="Red">if</span> <span class="Red">not</span> include_regulariztion:
+<span id="L431" class="LineNr">431 </span>            <span class="Statement">return</span> data_loss
+<span id="L432" class="LineNr">432 </span>        <span class="Statement">return</span> data_loss, <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">regularization_loss</span>()
+<span id="L433" class="LineNr">433 </span>
+<span id="L434" class="LineNr">434 </span>    <span class="Statement">def</span> <span class="Green">new_pass</span>(<span class="Identifier">self</span>):
+<span id="L435" class="LineNr">435 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_sum <span class="Red">=</span> <span class="Number">0</span>
+<span id="L436" class="LineNr">436 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_count <span class="Red">=</span> <span class="Number">0</span>
+<span id="L437" class="LineNr">437 </span>
+<span id="L438" class="LineNr">438 </span><span class="Statement">class</span> <span class="Structure">Loss_CategoricalCrossentropy</span>(Loss):
+<span id="L439" class="LineNr">439 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, y_pred, y_true):
+<span id="L440" class="LineNr">440 </span>        samples <span class="Red">=</span> <span class="Green">len</span>(y_pred)
+<span id="L441" class="LineNr">441 </span>        y_pred_clipped <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">clip</span>(y_pred, <span class="Float">1e-7</span>, <span class="Number">1</span><span class="Red">-</span><span class="Float">1e-7</span>)
+<span id="L442" class="LineNr">442 </span>        correct_confidences <span class="Red">=</span> <span class="Number">0</span>
+<span id="L443" class="LineNr">443 </span>        <span class="Red">if</span> <span class="Green">len</span>(y_true<span class="Grey">.</span>shape) <span class="Red">==</span> <span class="Number">1</span>:
+<span id="L444" class="LineNr">444 </span>            correct_confidences <span class="Red">=</span> y_pred_clipped[<span class="Green">range</span>(samples), y_true]
+<span id="L445" class="LineNr">445 </span>        <span class="Red">elif</span> <span class="Green">len</span>(y_true<span class="Grey">.</span>shape) <span class="Red">==</span> <span class="Number">2</span>:
+<span id="L446" class="LineNr">446 </span>            correct_confidences <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sum</span>(y_pred_clipped <span class="Red">*</span> y_true, axis<span class="Red">=</span><span class="Number">1</span>)
+<span id="L447" class="LineNr">447 </span>
+<span id="L448" class="LineNr">448 </span>        negative_log_likelihoods <span class="Red">=</span> <span class="Red">-</span>np<span class="Grey">.</span><span class="Function">log</span>(correct_confidences)
+<span id="L449" class="LineNr">449 </span>
+<span id="L450" class="LineNr">450 </span>        <span class="Statement">return</span> negative_log_likelihoods
+<span id="L451" class="LineNr">451 </span>
+<span id="L452" class="LineNr">452 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues, y_true):
+<span id="L453" class="LineNr">453 </span>        samples <span class="Red">=</span> <span class="Green">len</span>(dvalues)
+<span id="L454" class="LineNr">454 </span>        labels <span class="Red">=</span> <span class="Green">len</span>(dvalues[<span class="Number">0</span>])
+<span id="L455" class="LineNr">455 </span>        <span class="Red">if</span> <span class="Green">len</span>(y_true<span class="Grey">.</span>shape) <span class="Red">==</span> <span class="Number">1</span>:
+<span id="L456" class="LineNr">456 </span>            y_true <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">eye</span>(labels)[y_true]
+<span id="L457" class="LineNr">457 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Red">-</span>y_true <span class="Red">/</span> dvalues
+<span id="L458" class="LineNr">458 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">/</span> samples
+<span id="L459" class="LineNr">459 </span>
+<span id="L460" class="LineNr">460 </span><span class="Statement">class</span> <span class="Structure">Activation_Softmax_Loss_CategoricalCrossentropy</span>():
+<span id="L461" class="LineNr">461 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues, y_true):
+<span id="L462" class="LineNr">462 </span>        samples <span class="Red">=</span> <span class="Green">len</span>(dvalues)
+<span id="L463" class="LineNr">463 </span>        <span class="Red">if</span> <span class="Green">len</span>(y_true<span class="Grey">.</span>shape) <span class="Red">==</span> <span class="Number">2</span>:
+<span id="L464" class="LineNr">464 </span>            y_true <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">argmax</span>(y_true, axis<span class="Red">=</span><span class="Number">1</span>)
+<span id="L465" class="LineNr">465 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> dvalues<span class="Grey">.</span><span class="Function">copy</span>()
+<span id="L466" class="LineNr">466 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs[<span class="Green">range</span>(samples), y_true] <span class="Red">-=</span> <span class="Number">1</span>
+<span id="L467" class="LineNr">467 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">/</span> samples
+<span id="L468" class="LineNr">468 </span>
+<span id="L469" class="LineNr">469 </span><span class="Statement">class</span> <span class="Structure">Loss_BinaryCrossentropy</span>(Loss):
+<span id="L470" class="LineNr">470 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, y_pred, y_true):
+<span id="L471" class="LineNr">471 </span>        y_pred_clipped <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">clip</span>(y_pred, <span class="Float">1e-7</span>, <span class="Number">1</span><span class="Red">-</span><span class="Float">1e-7</span>)
+<span id="L472" class="LineNr">472 </span>        sample_losses <span class="Red">=</span> <span class="Red">-</span>(y_true <span class="Red">*</span> np<span class="Grey">.</span><span class="Function">log</span>(y_pred_clipped) <span class="Red">+</span> (<span class="Number">1</span> <span class="Red">-</span> y_true) <span class="Red">*</span> np<span class="Grey">.</span><span class="Function">log</span>(<span class="Number">1</span> <span class="Red">-</span> y_pred_clipped))
+<span id="L473" class="LineNr">473 </span>        sample_losses <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">mean</span>(sample_losses, axis<span class="Red">=-</span><span class="Number">1</span>)
+<span id="L474" class="LineNr">474 </span>        <span class="Statement">return</span> sample_losses
+<span id="L475" class="LineNr">475 </span>
+<span id="L476" class="LineNr">476 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues, y_true):
+<span id="L477" class="LineNr">477 </span>        samples <span class="Red">=</span> <span class="Green">len</span>(dvalues)
+<span id="L478" class="LineNr">478 </span>        output <span class="Red">=</span> <span class="Green">len</span>(dvalues[<span class="Number">0</span>])
+<span id="L479" class="LineNr">479 </span>        clipped_dvalues <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">clip</span>(dvalues, <span class="Float">1e-7</span>, <span class="Number">1</span><span class="Red">-</span><span class="Float">1e-7</span>)
+<span id="L480" class="LineNr">480 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Red">-</span>(y_true <span class="Red">/</span> clipped_dvalues <span class="Red">-</span> (<span class="Number">1</span> <span class="Red">-</span> y_true) <span class="Red">/</span> (<span class="Number">1</span> <span class="Red">-</span> clipped_dvalues)) <span class="Red">/</span> output
+<span id="L481" class="LineNr">481 </span>
+<span id="L482" class="LineNr">482 </span><span class="Statement">class</span> <span class="Structure">Loss_MeanSquaredError</span>(Loss):
+<span id="L483" class="LineNr">483 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, y_pred, y_true):
+<span id="L484" class="LineNr">484 </span>        sample_losses <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">mean</span>((y_true <span class="Red">-</span> y_pred)<span class="Red">**</span><span class="Number">2</span>, axis<span class="Red">=-</span><span class="Number">1</span>)
+<span id="L485" class="LineNr">485 </span>        <span class="Statement">return</span> sample_losses
+<span id="L486" class="LineNr">486 </span>
+<span id="L487" class="LineNr">487 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues, y_true):
+<span id="L488" class="LineNr">488 </span>        samples <span class="Red">=</span> <span class="Green">len</span>(dvalues)
+<span id="L489" class="LineNr">489 </span>        output <span class="Red">=</span> <span class="Green">len</span>(dvalues[<span class="Number">0</span>])
+<span id="L490" class="LineNr">490 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Red">-</span><span class="Number">2</span> <span class="Red">*</span> (y_true <span class="Red">-</span> dvalues) <span class="Red">/</span> output<span class="Error"> </span>
+<span id="L491" class="LineNr">491 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">/</span> samples
+<span id="L492" class="LineNr">492 </span>
+<span id="L493" class="LineNr">493 </span><span class="Statement">class</span> <span class="Structure">Loss_MeanAbsoluteError</span>(Loss):
+<span id="L494" class="LineNr">494 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, y_pred, y_true):
+<span id="L495" class="LineNr">495 </span>        sample_losses <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">mean</span>(np<span class="Grey">.</span><span class="Function">abs</span>(y_true <span class="Red">-</span> y_pred), axis<span class="Red">=-</span><span class="Number">1</span>)
+<span id="L496" class="LineNr">496 </span>        <span class="Statement">return</span> sample_losses
+<span id="L497" class="LineNr">497 </span>
+<span id="L498" class="LineNr">498 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, dvalues, y_true):
+<span id="L499" class="LineNr">499 </span>        samples <span class="Red">=</span> <span class="Green">len</span>(dvalues)
+<span id="L500" class="LineNr">500 </span>        output <span class="Red">=</span> <span class="Green">len</span>(dvalues[<span class="Number">0</span>])
+<span id="L501" class="LineNr">501 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">sign</span>(y_true <span class="Red">-</span> dvalues) <span class="Red">/</span> output
+<span id="L502" class="LineNr">502 </span>        <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>dinputs <span class="Red">/</span> samples
+<span id="L503" class="LineNr">503 </span>
+<span id="L504" class="LineNr">504 </span><span class="Statement">class</span> <span class="Structure">Accuracy</span>:
+<span id="L505" class="LineNr">505 </span>    <span class="Statement">def</span> <span class="Green">calculate</span>(<span class="Identifier">self</span>, predictions, y):
+<span id="L506" class="LineNr">506 </span>        comparison <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">compare</span>(predictions, y)
+<span id="L507" class="LineNr">507 </span>        accuracy <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">mean</span>(comparison)
+<span id="L508" class="LineNr">508 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_sum <span class="Red">+=</span> np<span class="Grey">.</span><span class="Function">sum</span>(comparison)
+<span id="L509" class="LineNr">509 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_count <span class="Red">+=</span> <span class="Green">len</span>(comparison)
+<span id="L510" class="LineNr">510 </span>        <span class="Statement">return</span> accuracy
+<span id="L511" class="LineNr">511 </span>
+<span id="L512" class="LineNr">512 </span>    <span class="Statement">def</span> <span class="Green">calculate_accumulated</span>(<span class="Identifier">self</span>):
+<span id="L513" class="LineNr">513 </span>        accuracy <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accumulated_sum <span class="Red">/</span> <span class="Identifier">self</span><span class="Grey">.</span>accumulated_count
+<span id="L514" class="LineNr">514 </span>        <span class="Statement">return</span> accuracy
+<span id="L515" class="LineNr">515 </span>
+<span id="L516" class="LineNr">516 </span>    <span class="Statement">def</span> <span class="Green">new_pass</span>(<span class="Identifier">self</span>):
+<span id="L517" class="LineNr">517 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_sum <span class="Red">=</span> <span class="Number">0</span>
+<span id="L518" class="LineNr">518 </span>        <span class="Identifier">self</span><span class="Grey">.</span>accumulated_count <span class="Red">=</span> <span class="Number">0</span>
+<span id="L519" class="LineNr">519 </span>
+<span id="L520" class="LineNr">520 </span><span class="Statement">class</span> <span class="Structure">Accuracy_Categorical</span>(Accuracy):
+<span id="L521" class="LineNr">521 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>, <span class="Red">*</span>, binary<span class="Red">=</span><span class="Boolean">False</span>):
+<span id="L522" class="LineNr">522 </span>        <span class="Identifier">self</span><span class="Grey">.</span>binary <span class="Red">=</span> binary
+<span id="L523" class="LineNr">523 </span>
+<span id="L524" class="LineNr">524 </span>    <span class="Statement">def</span> <span class="Green">init</span>(<span class="Identifier">self</span>, y):
+<span id="L525" class="LineNr">525 </span>        <span class="Statement">pass</span>
+<span id="L526" class="LineNr">526 </span>
+<span id="L527" class="LineNr">527 </span>    <span class="Statement">def</span> <span class="Green">compare</span>(<span class="Identifier">self</span>, predictions, y):
+<span id="L528" class="LineNr">528 </span>        <span class="Red">if</span> <span class="Red">not</span> <span class="Identifier">self</span><span class="Grey">.</span>binary <span class="Red">and</span> <span class="Green">len</span>(y<span class="Grey">.</span>shape) <span class="Red">==</span> <span class="Number">2</span>:
+<span id="L529" class="LineNr">529 </span>            y <span class="Red">=</span> mp<span class="Grey">.</span><span class="Function">argmax</span>(y, axis<span class="Red">=</span><span class="Number">1</span>)
+<span id="L530" class="LineNr">530 </span>        <span class="Statement">return</span> predictions <span class="Red">==</span> y
+<span id="L531" class="LineNr">531 </span>
+<span id="L532" class="LineNr">532 </span><span class="Statement">class</span> <span class="Structure">Accuracy_Regression</span>(Accuracy):
+<span id="L533" class="LineNr">533 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>):
+<span id="L534" class="LineNr">534 </span>        <span class="Identifier">self</span><span class="Grey">.</span>precision <span class="Red">=</span> <span class="OrangeItalic">None</span>
+<span id="L535" class="LineNr">535 </span>
+<span id="L536" class="LineNr">536 </span>    <span class="Statement">def</span> <span class="Green">init</span>(<span class="Identifier">self</span>, y, reinit<span class="Red">=</span><span class="Boolean">False</span>):
+<span id="L537" class="LineNr">537 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>precision <span class="Red">is</span> <span class="OrangeItalic">None</span> <span class="Red">or</span> reinit:
+<span id="L538" class="LineNr">538 </span>            <span class="Identifier">self</span><span class="Grey">.</span>precision <span class="Red">=</span> np<span class="Grey">.</span><span class="Function">std</span>(y) <span class="Red">/</span> <span class="Number">250</span>
+<span id="L539" class="LineNr">539 </span>
+<span id="L540" class="LineNr">540 </span>    <span class="Statement">def</span> <span class="Green">compare</span>(<span class="Identifier">self</span>, predictions, y):
+<span id="L541" class="LineNr">541 </span>        <span class="Statement">return</span> np<span class="Grey">.</span><span class="Function">absolute</span>(predictions <span class="Red">-</span> y) <span class="Red">&lt;</span> <span class="Identifier">self</span><span class="Grey">.</span>precision
+<span id="L542" class="LineNr">542 </span>
+<span id="L543" class="LineNr">543 </span><span class="Statement">class</span> <span class="Structure">Model</span>:
+<span id="L544" class="LineNr">544 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>):
+<span id="L545" class="LineNr">545 </span>        <span class="Identifier">self</span><span class="Grey">.</span>layers <span class="Red">=</span> []
+<span id="L546" class="LineNr">546 </span>        <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output <span class="Red">=</span> <span class="OrangeItalic">None</span>
+<span id="L547" class="LineNr">547 </span>
+<span id="L548" class="LineNr">548 </span>    <span class="Statement">def</span> <span class="Green">add</span>(<span class="Identifier">self</span>, layer):
+<span id="L549" class="LineNr">549 </span>        <span class="Identifier">self</span><span class="Grey">.</span>layers<span class="Grey">.</span><span class="Function">append</span>(layer)
+<span id="L550" class="LineNr">550 </span>
+<span id="L551" class="LineNr">551 </span>    <span class="Statement">def</span> <span class="Green">set</span>(<span class="Identifier">self</span>, <span class="Red">*</span>, loss<span class="Red">=</span><span class="OrangeItalic">None</span>, optimizer<span class="Red">=</span><span class="OrangeItalic">None</span>, accuracy<span class="Red">=</span><span class="OrangeItalic">None</span>):
+<span id="L552" class="LineNr">552 </span>        <span class="Red">if</span> loss <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L553" class="LineNr">553 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss <span class="Red">=</span> loss
+<span id="L554" class="LineNr">554 </span>        <span class="Red">if</span> optimizer <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L555" class="LineNr">555 </span>            <span class="Identifier">self</span><span class="Grey">.</span>optimizer <span class="Red">=</span> optimizer
+<span id="L556" class="LineNr">556 </span>        <span class="Red">if</span> accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L557" class="LineNr">557 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">=</span> accuracy
+<span id="L558" class="LineNr">558 </span>        <span class="Red">else</span>:
+<span id="L559" class="LineNr">559 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">=</span> accuracy
+<span id="L560" class="LineNr">560 </span>
+<span id="L561" class="LineNr">561 </span>    <span class="Statement">def</span> <span class="Green">finalize</span>(<span class="Identifier">self</span>):
+<span id="L562" class="LineNr">562 </span>        <span class="Identifier">self</span><span class="Grey">.</span>input_layer <span class="Red">=</span> <span class="Function">Layer_Input</span>()
+<span id="L563" class="LineNr">563 </span>        layer_count <span class="Red">=</span> <span class="Green">len</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers)
+<span id="L564" class="LineNr">564 </span>        <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers <span class="Red">=</span> []
+<span id="L565" class="LineNr">565 </span>        <span class="Red">for</span> i <span class="Red">in</span> <span class="Green">range</span>(layer_count):
+<span id="L566" class="LineNr">566 </span>            <span class="Red">if</span> i <span class="Red">==</span> <span class="Number">0</span>:
+<span id="L567" class="LineNr">567 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>prev <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>input_layer
+<span id="L568" class="LineNr">568 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>next <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">+</span><span class="Number">1</span>]
+<span id="L569" class="LineNr">569 </span>            <span class="Red">elif</span> i <span class="Red">&lt;</span> layer_count <span class="Red">-</span> <span class="Number">1</span>:
+<span id="L570" class="LineNr">570 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>prev <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">-</span><span class="Number">1</span>]
+<span id="L571" class="LineNr">571 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>next <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">+</span><span class="Number">1</span>]
+<span id="L572" class="LineNr">572 </span>            <span class="Red">else</span>:
+<span id="L573" class="LineNr">573 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>prev <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">-</span><span class="Number">1</span>]
+<span id="L574" class="LineNr">574 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>next <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss
+<span id="L575" class="LineNr">575 </span>                <span class="Identifier">self</span><span class="Grey">.</span>output_layer_activation <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i]
+<span id="L576" class="LineNr">576 </span>            <span class="Red">if</span> <span class="Green">hasattr</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[i], <span class="String">'weights'</span>):
+<span id="L577" class="LineNr">577 </span>                <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers<span class="Grey">.</span><span class="Function">append</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[i])
+<span id="L578" class="LineNr">578 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>loss <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L579" class="LineNr">579 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">remember_trainable_layers</span>(<span class="Identifier">self</span><span class="Grey">.</span>trainable_layers)
+<span id="L580" class="LineNr">580 </span>        <span class="Red">if</span> <span class="Green">isinstance</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[<span class="Red">-</span><span class="Number">1</span>], Activation_Softmax) <span class="Red">and</span> <span class="Green">isinstance</span>(<span class="Identifier">self</span><span class="Grey">.</span>loss, Loss_CategoricalCrossentropy):
+<span id="L581" class="LineNr">581 </span>            <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output <span class="Red">=</span> <span class="Function">Activation_Softmax_Loss_CategoricalCrossentropy</span>()
+<span id="L582" class="LineNr">582 </span>
+<span id="L583" class="LineNr">583 </span>    <span class="Statement">def</span> <span class="Green">train</span>(<span class="Identifier">self</span>, X, y, <span class="Red">*</span>, epochs<span class="Red">=</span><span class="Number">1</span>, batch_size<span class="Red">=</span><span class="OrangeItalic">None</span>, print_every<span class="Red">=</span><span class="Number">1</span>, validation_data<span class="Red">=</span><span class="OrangeItalic">None</span>, verbose<span class="Red">=</span><span class="Boolean">True</span>):
+<span id="L584" class="LineNr">584 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L585" class="LineNr">585 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">init</span>(y)
+<span id="L586" class="LineNr">586 </span>        train_steps <span class="Red">=</span> <span class="Number">1</span>
+<span id="L587" class="LineNr">587 </span>        <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L588" class="LineNr">588 </span>            train_steps <span class="Red">=</span> <span class="Green">len</span>(X) <span class="Red">//</span> batch_size
+<span id="L589" class="LineNr">589 </span>            <span class="Red">if</span> train_steps <span class="Red">*</span> batch_size <span class="Red">&lt;</span> <span class="Green">len</span>(X):
+<span id="L590" class="LineNr">590 </span>                train_steps <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L591" class="LineNr">591 </span>        <span class="Red">for</span> epoch <span class="Red">in</span> <span class="Green">range</span>(<span class="Number">1</span>, epochs<span class="Red">+</span><span class="Number">1</span>):
+<span id="L592" class="LineNr">592 </span>            <span class="Red">if</span> verbose:
+<span id="L593" class="LineNr">593 </span>                <span class="Green">print</span>(<span class="String">f'epoch: </span><span class="Special">{</span>epoch<span class="Special">}</span><span class="String">'</span>)
+<span id="L594" class="LineNr">594 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L595" class="LineNr">595 </span>            <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L596" class="LineNr">596 </span>                <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L597" class="LineNr">597 </span>            <span class="Red">for</span> step <span class="Red">in</span> <span class="Green">range</span>(train_steps):
+<span id="L598" class="LineNr">598 </span>                <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="OrangeItalic">None</span>:
+<span id="L599" class="LineNr">599 </span>                    batch_X <span class="Red">=</span> X
+<span id="L600" class="LineNr">600 </span>                    batch_y <span class="Red">=</span> y
+<span id="L601" class="LineNr">601 </span>                <span class="Red">else</span>:
+<span id="L602" class="LineNr">602 </span>                    batch_X <span class="Red">=</span> X[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L603" class="LineNr">603 </span>                    batch_y <span class="Red">=</span> y[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L604" class="LineNr">604 </span>                output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">forward</span>(batch_X, training<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L605" class="LineNr">605 </span>                data_loss, regularization_loss <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate</span>(output, batch_y, include_regulariztion<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L606" class="LineNr">606 </span>                loss <span class="Red">=</span> data_loss <span class="Red">+</span> regularization_loss
+<span id="L607" class="LineNr">607 </span>                predictions <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>output_layer_activation<span class="Grey">.</span><span class="Function">predictions</span>(output)
+<span id="L608" class="LineNr">608 </span>                <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L609" class="LineNr">609 </span>                    accuracy <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate</span>(predictions, batch_y)
+<span id="L610" class="LineNr">610 </span>                <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">backward</span>(output, batch_y)
+<span id="L611" class="LineNr">611 </span>                <span class="Identifier">self</span><span class="Grey">.</span>optimizer<span class="Grey">.</span><span class="Function">pre_update_params</span>()
+<span id="L612" class="LineNr">612 </span>                <span class="Red">for</span> layer <span class="Red">in</span> <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers:
+<span id="L613" class="LineNr">613 </span>                    <span class="Identifier">self</span><span class="Grey">.</span>optimizer<span class="Grey">.</span><span class="Function">update_params</span>(layer)
+<span id="L614" class="LineNr">614 </span>                <span class="Identifier">self</span><span class="Grey">.</span>optimizer<span class="Grey">.</span><span class="Function">post_update_params</span>()
+<span id="L615" class="LineNr">615 </span>                <span class="Red">if</span> verbose:
+<span id="L616" class="LineNr">616 </span>                    <span class="Red">if</span> <span class="Red">not</span> step <span class="Red">%</span> print_every <span class="Red">or</span> step <span class="Red">==</span> (train_steps <span class="Red">-</span> <span class="Number">1</span>):
+<span id="L617" class="LineNr">617 </span>                        <span class="Green">print</span>(<span class="String">f'step: </span><span class="Special">{</span>step<span class="Special">}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L618" class="LineNr">618 </span>                            <span class="String">f'acc: </span><span class="Special">{</span>accuracy<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L619" class="LineNr">619 </span>                            <span class="String">f'loss: </span><span class="Special">{</span>loss<span class="Special">:.3f}</span><span class="String"> ('</span> <span class="Red">+</span>
+<span id="L620" class="LineNr">620 </span>                            <span class="String">f'data_loss: </span><span class="Special">{</span>data_loss<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L621" class="LineNr">621 </span>                            <span class="String">f'reg_loss: </span><span class="Special">{</span>regularization_loss<span class="Special">:.3f}</span><span class="String">), '</span> <span class="Red">+</span>
+<span id="L622" class="LineNr">622 </span>                            <span class="String">f'lr: </span><span class="Special">{</span><span class="Identifier">self</span>.optimizer.current_learning_rate<span class="Special">}</span><span class="String">'</span>)
+<span id="L623" class="LineNr">623 </span>            epoch_data_loss, epoch_regularization_loss <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate_accumulated</span>(include_regulariztion<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L624" class="LineNr">624 </span>            epoch_loss <span class="Red">=</span> epoch_data_loss <span class="Red">+</span> epoch_regularization_loss
+<span id="L625" class="LineNr">625 </span>            <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L626" class="LineNr">626 </span>                epoch_accuracy <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate_accumulated</span>()
+<span id="L627" class="LineNr">627 </span>            <span class="Red">if</span> verbose:
+<span id="L628" class="LineNr">628 </span>                <span class="Green">print</span>(<span class="String">f'training, '</span> <span class="Red">+</span>
+<span id="L629" class="LineNr">629 </span>                    <span class="String">f'acc: </span><span class="Special">{</span>epoch_accuracy<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L630" class="LineNr">630 </span>                    <span class="String">f'loss: </span><span class="Special">{</span>epoch_loss<span class="Special">:.3f}</span><span class="String"> ('</span> <span class="Red">+</span>
+<span id="L631" class="LineNr">631 </span>                    <span class="String">f'data_loss: </span><span class="Special">{</span>epoch_data_loss<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L632" class="LineNr">632 </span>                    <span class="String">f'reg_loss: </span><span class="Special">{</span>epoch_regularization_loss<span class="Special">:.3f}</span><span class="String">), '</span> <span class="Red">+</span>
+<span id="L633" class="LineNr">633 </span>                    <span class="String">f'lr: </span><span class="Special">{</span><span class="Identifier">self</span>.optimizer.current_learning_rate<span class="Special">}</span><span class="String">'</span>)<span class="Error">    </span>
+<span id="L634" class="LineNr">634 </span>            <span class="Red">if</span> validation_data <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L635" class="LineNr">635 </span>                <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">evaluate</span>(<span class="Red">*</span>validation_data, batch_size<span class="Red">=</span>batch_size, verbose<span class="Red">=</span>verbose)
+<span id="L636" class="LineNr">636 </span>
+<span id="L637" class="LineNr">637 </span>    <span class="Statement">def</span> <span class="Green">evaluate</span>(<span class="Identifier">self</span>, X_val, y_val, <span class="Red">*</span>, batch_size<span class="Red">=</span><span class="OrangeItalic">None</span>, verbose<span class="Red">=</span><span class="Boolean">True</span>):
+<span id="L638" class="LineNr">638 </span>        validation_steps <span class="Red">=</span> <span class="Number">1</span>
+<span id="L639" class="LineNr">639 </span>        <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L640" class="LineNr">640 </span>            validation_steps <span class="Red">=</span> <span class="Green">len</span>(X_val) <span class="Red">//</span> batch_size
+<span id="L641" class="LineNr">641 </span>            <span class="Red">if</span> validation_steps <span class="Red">*</span> batch_size <span class="Red">&lt;</span> <span class="Green">len</span>(X_val):
+<span id="L642" class="LineNr">642 </span>                validation_steps <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L643" class="LineNr">643 </span>        <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L644" class="LineNr">644 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L645" class="LineNr">645 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L646" class="LineNr">646 </span>        <span class="Red">for</span> step <span class="Red">in</span> <span class="Green">range</span>(validation_steps):
+<span id="L647" class="LineNr">647 </span>            <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="OrangeItalic">None</span>:
+<span id="L648" class="LineNr">648 </span>                batch_X <span class="Red">=</span> X_val
+<span id="L649" class="LineNr">649 </span>                batch_y <span class="Red">=</span> y_val
+<span id="L650" class="LineNr">650 </span>            <span class="Red">else</span>:
+<span id="L651" class="LineNr">651 </span>                batch_X <span class="Red">=</span> X_val[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L652" class="LineNr">652 </span>                batch_y <span class="Red">=</span> y_val[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L653" class="LineNr">653 </span>            output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">forward</span>(batch_X, training<span class="Red">=</span><span class="Boolean">False</span>)
+<span id="L654" class="LineNr">654 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate</span>(output, batch_y)
+<span id="L655" class="LineNr">655 </span>            predictions <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>output_layer_activation<span class="Grey">.</span><span class="Function">predictions</span>(output)
+<span id="L656" class="LineNr">656 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate</span>(predictions, batch_y)
+<span id="L657" class="LineNr">657 </span>        validation_loss <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate_accumulated</span>()
+<span id="L658" class="LineNr">658 </span>        validation_accuracy <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate_accumulated</span>()
+<span id="L659" class="LineNr">659 </span>        <span class="Red">if</span> verbose:
+<span id="L660" class="LineNr">660 </span>            <span class="Green">print</span>(<span class="String">f'validation, '</span> <span class="Red">+</span>
+<span id="L661" class="LineNr">661 </span>                <span class="String">f'acc: </span><span class="Special">{</span>validation_accuracy<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L662" class="LineNr">662 </span>                <span class="String">f'loss: </span><span class="Special">{</span>validation_loss<span class="Special">:.3f}</span><span class="String">'</span>)
+<span id="L663" class="LineNr">663 </span>
+<span id="L664" class="LineNr">664 </span>    <span class="Statement">def</span> <span class="Green">predict</span>(<span class="Identifier">self</span>, X, <span class="Red">*</span>, batch_size<span class="Red">=</span><span class="OrangeItalic">None</span>):
+<span id="L665" class="LineNr">665 </span>        prediction_steps <span class="Red">=</span> <span class="Number">1</span>
+<span id="L666" class="LineNr">666 </span>        <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L667" class="LineNr">667 </span>            prediction_steps <span class="Red">=</span> <span class="Green">len</span>(X) <span class="Red">//</span> batch_size
+<span id="L668" class="LineNr">668 </span>            <span class="Red">if</span> prediction_steps <span class="Red">*</span> batch_size <span class="Red">&lt;</span> <span class="Green">len</span>(X):
+<span id="L669" class="LineNr">669 </span>                prediction_steps <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L670" class="LineNr">670 </span>        output <span class="Red">=</span> []
+<span id="L671" class="LineNr">671 </span>        <span class="Red">for</span> step <span class="Red">in</span> <span class="Green">range</span>(prediction_steps):
+<span id="L672" class="LineNr">672 </span>            <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="OrangeItalic">None</span>:
+<span id="L673" class="LineNr">673 </span>                batch_X <span class="Red">=</span> X
+<span id="L674" class="LineNr">674 </span>            <span class="Red">else</span>:
+<span id="L675" class="LineNr">675 </span>                batch_X <span class="Red">=</span> X[step <span class="Red">*</span> batch_size:(step <span class="Red">+</span> <span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L676" class="LineNr">676 </span>            batch_output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">forward</span>(batch_X, training<span class="Red">=</span><span class="Boolean">False</span>)
+<span id="L677" class="LineNr">677 </span>            output<span class="Grey">.</span><span class="Function">append</span>(batch_output)
+<span id="L678" class="LineNr">678 </span>        <span class="Statement">return</span> np<span class="Grey">.</span><span class="Function">vstack</span>(output)
+<span id="L679" class="LineNr">679 </span>
+<span id="L680" class="LineNr">680 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, X, training):
+<span id="L681" class="LineNr">681 </span>        <span class="Identifier">self</span><span class="Grey">.</span>input_layer<span class="Grey">.</span><span class="Function">forward</span>(X, training)
+<span id="L682" class="LineNr">682 </span>        <span class="Red">for</span> layer <span class="Red">in</span> <span class="Identifier">self</span><span class="Grey">.</span>layers:
+<span id="L683" class="LineNr">683 </span>            layer<span class="Grey">.</span><span class="Function">forward</span>(layer<span class="Grey">.</span>prev<span class="Grey">.</span>output, training)
+<span id="L684" class="LineNr">684 </span>        <span class="Statement">return</span> layer<span class="Grey">.</span>output
+<span id="L685" class="LineNr">685 </span>
+<span id="L686" class="LineNr">686 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, output, y):
+<span id="L687" class="LineNr">687 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L688" class="LineNr">688 </span>            <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output<span class="Grey">.</span><span class="Function">backward</span>(output, y)
+<span id="L689" class="LineNr">689 </span>            <span class="Identifier">self</span><span class="Grey">.</span>layers[<span class="Red">-</span><span class="Number">1</span>]<span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output<span class="Grey">.</span>dinputs
+<span id="L690" class="LineNr">690 </span>            <span class="Red">for</span> layer <span class="Red">in</span> <span class="Green">reversed</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[:<span class="Red">-</span><span class="Number">1</span>]):
+<span id="L691" class="LineNr">691 </span>                layer<span class="Grey">.</span><span class="Function">backward</span>(layer<span class="Grey">.</span>next<span class="Grey">.</span>dinputs)
+<span id="L692" class="LineNr">692 </span>            <span class="Statement">return</span>
+<span id="L693" class="LineNr">693 </span>        <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">backward</span>(output, y)
+<span id="L694" class="LineNr">694 </span>        <span class="Red">for</span> layer <span class="Red">in</span> <span class="Green">reversed</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers):
+<span id="L695" class="LineNr">695 </span>            layer<span class="Grey">.</span><span class="Function">backward</span>(layer<span class="Grey">.</span>next<span class="Grey">.</span>dinputs)
+<span id="L696" class="LineNr">696 </span>
+<span id="L697" class="LineNr">697 </span>    <span class="Statement">def</span> <span class="Green">get_parameters</span>(<span class="Identifier">self</span>):
+<span id="L698" class="LineNr">698 </span>        parameters <span class="Red">=</span> []
+<span id="L699" class="LineNr">699 </span>        <span class="Red">for</span> layer <span class="Red">in</span> <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers:
+<span id="L700" class="LineNr">700 </span>            parameters<span class="Grey">.</span><span class="Function">append</span>(layer<span class="Grey">.</span><span class="Function">get_parameters</span>())
+<span id="L701" class="LineNr">701 </span>        <span class="Statement">return</span> parameters
+<span id="L702" class="LineNr">702 </span>
+<span id="L703" class="LineNr">703 </span>    <span class="Statement">def</span> <span class="Green">set_parameters</span>(<span class="Identifier">self</span>, parameters):
+<span id="L704" class="LineNr">704 </span>        <span class="Red">for</span> parameter_set, layer <span class="Red">in</span> <span class="Green">zip</span>(parameters, <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers):
+<span id="L705" class="LineNr">705 </span>            layer<span class="Grey">.</span><span class="Function">set_parameters</span>(<span class="Red">*</span>parameter_set)
+<span id="L706" class="LineNr">706 </span>
+<span id="L707" class="LineNr">707 </span>    <span class="Statement">def</span> <span class="Green">save_parameters</span>(<span class="Identifier">self</span>, path):
+<span id="L708" class="LineNr">708 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'wb'</span>) <span class="Statement">as</span> f:
+<span id="L709" class="LineNr">709 </span>            pickle<span class="Grey">.</span><span class="Function">dump</span>(<span class="Identifier">self</span><span class="Grey">.</span><span class="Function">get_parameters</span>(), f)
+<span id="L710" class="LineNr">710 </span>
+<span id="L711" class="LineNr">711 </span>    <span class="Statement">def</span> <span class="Green">load_parameters</span>(<span class="Identifier">self</span>, path):
+<span id="L712" class="LineNr">712 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'rb'</span>) <span class="Statement">as</span> f:
+<span id="L713" class="LineNr">713 </span>            <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">load_parameters</span>(pickle<span class="Grey">.</span><span class="Function">load</span>(f))
+<span id="L714" class="LineNr">714 </span>
+<span id="L715" class="LineNr">715 </span>    <span class="Statement">def</span> <span class="Green">save</span>(<span class="Identifier">self</span>, path):
+<span id="L716" class="LineNr">716 </span>        model <span class="Red">=</span> copy<span class="Grey">.</span><span class="Function">deepcopy</span>(<span class="Identifier">self</span>)
+<span id="L717" class="LineNr">717 </span>        model<span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L718" class="LineNr">718 </span>        model<span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L719" class="LineNr">719 </span>        model<span class="Grey">.</span>input_layer<span class="Grey">.</span>__dict__<span class="Grey">.</span><span class="Function">pop</span>(<span class="String">'output'</span>, <span class="OrangeItalic">None</span>)
+<span id="L720" class="LineNr">720 </span>        model<span class="Grey">.</span>loss<span class="Grey">.</span>__dict__<span class="Grey">.</span><span class="Function">pop</span>(<span class="String">'dinputs'</span>, <span class="OrangeItalic">None</span>)
+<span id="L721" class="LineNr">721 </span>        <span class="Red">for</span> layer <span class="Red">in</span> model<span class="Grey">.</span>layers:
+<span id="L722" class="LineNr">722 </span>            <span class="Red">for</span> <span class="Green">property</span> <span class="Red">in</span> [<span class="String">'inputs'</span>, <span class="String">'output'</span>, <span class="String">'dinputs'</span>, <span class="String">'dweights'</span>, <span class="String">'dbiases'</span>]:
+<span id="L723" class="LineNr">723 </span>                layer<span class="Grey">.</span>__dict__<span class="Grey">.</span><span class="Function">pop</span>(<span class="Green">property</span>, <span class="OrangeItalic">None</span>)
+<span id="L724" class="LineNr">724 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'wb'</span>) <span class="Statement">as</span> f:
+<span id="L725" class="LineNr">725 </span>            pickle<span class="Grey">.</span><span class="Function">dump</span>(model, f)
+<span id="L726" class="LineNr">726 </span>
+<span id="L727" class="LineNr">727 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">staticmethod</span>
+<span id="L728" class="LineNr">728 </span>    <span class="Statement">def</span> <span class="Green">load</span>(path):
+<span id="L729" class="LineNr">729 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'rb'</span>) <span class="Statement">as</span> f:
+<span id="L730" class="LineNr">730 </span>            model <span class="Red">=</span> pickle<span class="Grey">.</span><span class="Function">load</span>(f)
+<span id="L731" class="LineNr">731 </span>        <span class="Statement">return</span> model
+<span id="L732" class="LineNr">732 </span><span class="Error">   </span>
+<span id="L733" class="LineNr">733 </span><span class="Error">        </span>
+<span id="L734" class="LineNr">734 </span>
+<span id="L735" class="LineNr">735 </span><span class="Statement">class</span> <span class="Structure">Model_AAC</span>:
+<span id="L736" class="LineNr">736 </span>    <span class="Statement">def</span> <span class="Green">__init__</span>(<span class="Identifier">self</span>):
+<span id="L737" class="LineNr">737 </span>        <span class="Identifier">self</span><span class="Grey">.</span>layers <span class="Red">=</span> []
+<span id="L738" class="LineNr">738 </span>        <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output <span class="Red">=</span> <span class="OrangeItalic">None</span>
+<span id="L739" class="LineNr">739 </span>
+<span id="L740" class="LineNr">740 </span>    <span class="Statement">def</span> <span class="Green">add</span>(<span class="Identifier">self</span>, layer):
+<span id="L741" class="LineNr">741 </span>        <span class="Identifier">self</span><span class="Grey">.</span>layers<span class="Grey">.</span><span class="Function">append</span>(layer)
+<span id="L742" class="LineNr">742 </span>
+<span id="L743" class="LineNr">743 </span>    <span class="Statement">def</span> <span class="Green">set</span>(<span class="Identifier">self</span>, <span class="Red">*</span>, loss<span class="Red">=</span><span class="OrangeItalic">None</span>, optimizer<span class="Red">=</span><span class="OrangeItalic">None</span>, accuracy<span class="Red">=</span><span class="OrangeItalic">None</span>):
+<span id="L744" class="LineNr">744 </span>        <span class="Red">if</span> loss <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L745" class="LineNr">745 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss <span class="Red">=</span> loss
+<span id="L746" class="LineNr">746 </span>        <span class="Red">if</span> optimizer <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L747" class="LineNr">747 </span>            <span class="Identifier">self</span><span class="Grey">.</span>optimizer <span class="Red">=</span> optimizer
+<span id="L748" class="LineNr">748 </span>        <span class="Red">if</span> accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L749" class="LineNr">749 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">=</span> accuracy
+<span id="L750" class="LineNr">750 </span>        <span class="Red">else</span>:
+<span id="L751" class="LineNr">751 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">=</span> accuracy
+<span id="L752" class="LineNr">752 </span>
+<span id="L753" class="LineNr">753 </span>    <span class="Statement">def</span> <span class="Green">finalize</span>(<span class="Identifier">self</span>):
+<span id="L754" class="LineNr">754 </span>        <span class="Identifier">self</span><span class="Grey">.</span>input_layer <span class="Red">=</span> <span class="Function">Layer_Input</span>()
+<span id="L755" class="LineNr">755 </span>        layer_count <span class="Red">=</span> <span class="Green">len</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers)
+<span id="L756" class="LineNr">756 </span>        <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers <span class="Red">=</span> []
+<span id="L757" class="LineNr">757 </span>        <span class="Red">for</span> i <span class="Red">in</span> <span class="Green">range</span>(layer_count):
+<span id="L758" class="LineNr">758 </span>            <span class="Red">if</span> i <span class="Red">==</span> <span class="Number">0</span>:
+<span id="L759" class="LineNr">759 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>prev <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>input_layer
+<span id="L760" class="LineNr">760 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>next <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">+</span><span class="Number">1</span>]
+<span id="L761" class="LineNr">761 </span>            <span class="Red">elif</span> i <span class="Red">&lt;</span> layer_count <span class="Red">-</span> <span class="Number">1</span>:
+<span id="L762" class="LineNr">762 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>prev <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">-</span><span class="Number">1</span>]
+<span id="L763" class="LineNr">763 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>next <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">+</span><span class="Number">1</span>]
+<span id="L764" class="LineNr">764 </span>            <span class="Red">else</span>:
+<span id="L765" class="LineNr">765 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>prev <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i<span class="Red">-</span><span class="Number">1</span>]
+<span id="L766" class="LineNr">766 </span>                <span class="Identifier">self</span><span class="Grey">.</span>layers[i]<span class="Grey">.</span>next <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss
+<span id="L767" class="LineNr">767 </span>                <span class="Identifier">self</span><span class="Grey">.</span>output_layer_activation <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>layers[i]
+<span id="L768" class="LineNr">768 </span>            <span class="Red">if</span> <span class="Green">hasattr</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[i], <span class="String">'weights'</span>):
+<span id="L769" class="LineNr">769 </span>                <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers<span class="Grey">.</span><span class="Function">append</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[i])
+<span id="L770" class="LineNr">770 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>loss <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L771" class="LineNr">771 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">remember_trainable_layers</span>(<span class="Identifier">self</span><span class="Grey">.</span>trainable_layers)
+<span id="L772" class="LineNr">772 </span>        <span class="Red">if</span> <span class="Green">isinstance</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[<span class="Red">-</span><span class="Number">1</span>], Activation_Softmax) <span class="Red">and</span> <span class="Green">isinstance</span>(<span class="Identifier">self</span><span class="Grey">.</span>loss, Loss_CategoricalCrossentropy):
+<span id="L773" class="LineNr">773 </span>            <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output <span class="Red">=</span> <span class="Function">Activation_Softmax_Loss_CategoricalCrossentropy</span>()
+<span id="L774" class="LineNr">774 </span>
+<span id="L775" class="LineNr">775 </span>    <span class="Statement">def</span> <span class="Green">train</span>(<span class="Identifier">self</span>, X, y, <span class="Red">*</span>, epochs<span class="Red">=</span><span class="Number">1</span>, batch_size<span class="Red">=</span><span class="OrangeItalic">None</span>, print_every<span class="Red">=</span><span class="Number">1</span>, validation_data<span class="Red">=</span><span class="OrangeItalic">None</span>, verbose<span class="Red">=</span><span class="Boolean">True</span>):
+<span id="L776" class="LineNr">776 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L777" class="LineNr">777 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">init</span>(y)
+<span id="L778" class="LineNr">778 </span>        train_steps <span class="Red">=</span> <span class="Number">1</span>
+<span id="L779" class="LineNr">779 </span>        <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L780" class="LineNr">780 </span>            train_steps <span class="Red">=</span> <span class="Green">len</span>(X) <span class="Red">//</span> batch_size
+<span id="L781" class="LineNr">781 </span>            <span class="Red">if</span> train_steps <span class="Red">*</span> batch_size <span class="Red">&lt;</span> <span class="Green">len</span>(X):
+<span id="L782" class="LineNr">782 </span>                train_steps <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L783" class="LineNr">783 </span>        <span class="Red">for</span> epoch <span class="Red">in</span> <span class="Green">range</span>(<span class="Number">1</span>, epochs<span class="Red">+</span><span class="Number">1</span>):
+<span id="L784" class="LineNr">784 </span>            <span class="Red">if</span> verbose:
+<span id="L785" class="LineNr">785 </span>                <span class="Green">print</span>(<span class="String">f'epoch: </span><span class="Special">{</span>epoch<span class="Special">}</span><span class="String">'</span>)
+<span id="L786" class="LineNr">786 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L787" class="LineNr">787 </span>            <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L788" class="LineNr">788 </span>                <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L789" class="LineNr">789 </span>            <span class="Red">for</span> step <span class="Red">in</span> <span class="Green">range</span>(train_steps):
+<span id="L790" class="LineNr">790 </span>                <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="OrangeItalic">None</span>:
+<span id="L791" class="LineNr">791 </span>                    batch_X <span class="Red">=</span> X
+<span id="L792" class="LineNr">792 </span>                    batch_y <span class="Red">=</span> y
+<span id="L793" class="LineNr">793 </span>                <span class="Red">else</span>:
+<span id="L794" class="LineNr">794 </span>                    batch_X <span class="Red">=</span> X[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L795" class="LineNr">795 </span>                    batch_y <span class="Red">=</span> y[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L796" class="LineNr">796 </span>                output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">forward</span>(batch_X, training<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L797" class="LineNr">797 </span>                data_loss, regularization_loss <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate</span>(output, batch_y, include_regulariztion<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L798" class="LineNr">798 </span>                loss <span class="Red">=</span> data_loss <span class="Red">+</span> regularization_loss
+<span id="L799" class="LineNr">799 </span>                predictions <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>output_layer_activation<span class="Grey">.</span><span class="Function">predictions</span>(output)
+<span id="L800" class="LineNr">800 </span>                <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L801" class="LineNr">801 </span>                    accuracy <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate</span>(predictions, batch_y)
+<span id="L802" class="LineNr">802 </span>                <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">backward</span>(output, batch_y)
+<span id="L803" class="LineNr">803 </span>                <span class="Identifier">self</span><span class="Grey">.</span>optimizer<span class="Grey">.</span><span class="Function">pre_update_params</span>()
+<span id="L804" class="LineNr">804 </span>                <span class="Red">for</span> layer <span class="Red">in</span> <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers:
+<span id="L805" class="LineNr">805 </span>                    <span class="Identifier">self</span><span class="Grey">.</span>optimizer<span class="Grey">.</span><span class="Function">update_params</span>(layer)
+<span id="L806" class="LineNr">806 </span>                <span class="Identifier">self</span><span class="Grey">.</span>optimizer<span class="Grey">.</span><span class="Function">post_update_params</span>()
+<span id="L807" class="LineNr">807 </span>                <span class="Red">if</span> verbose:
+<span id="L808" class="LineNr">808 </span>                    <span class="Red">if</span> <span class="Red">not</span> step <span class="Red">%</span> print_every <span class="Red">or</span> step <span class="Red">==</span> (train_steps <span class="Red">-</span> <span class="Number">1</span>):
+<span id="L809" class="LineNr">809 </span>                        <span class="Green">print</span>(<span class="String">f'step: </span><span class="Special">{</span>step<span class="Special">}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L810" class="LineNr">810 </span>                            <span class="String">f'acc: </span><span class="Special">{</span>accuracy<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L811" class="LineNr">811 </span>                            <span class="String">f'loss: </span><span class="Special">{</span>loss<span class="Special">:.3f}</span><span class="String"> ('</span> <span class="Red">+</span>
+<span id="L812" class="LineNr">812 </span>                            <span class="String">f'data_loss: </span><span class="Special">{</span>data_loss<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L813" class="LineNr">813 </span>                            <span class="String">f'reg_loss: </span><span class="Special">{</span>regularization_loss<span class="Special">:.3f}</span><span class="String">), '</span> <span class="Red">+</span>
+<span id="L814" class="LineNr">814 </span>                            <span class="String">f'lr: </span><span class="Special">{</span><span class="Identifier">self</span>.optimizer.current_learning_rate<span class="Special">}</span><span class="String">'</span>)
+<span id="L815" class="LineNr">815 </span>            epoch_data_loss, epoch_regularization_loss <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate_accumulated</span>(include_regulariztion<span class="Red">=</span><span class="Boolean">True</span>)
+<span id="L816" class="LineNr">816 </span>            epoch_loss <span class="Red">=</span> epoch_data_loss <span class="Red">+</span> epoch_regularization_loss
+<span id="L817" class="LineNr">817 </span>            <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L818" class="LineNr">818 </span>                epoch_accuracy <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate_accumulated</span>()
+<span id="L819" class="LineNr">819 </span>            <span class="Red">if</span> verbose:
+<span id="L820" class="LineNr">820 </span>                <span class="Green">print</span>(<span class="String">f'training, '</span> <span class="Red">+</span>
+<span id="L821" class="LineNr">821 </span>                    <span class="String">f'acc: </span><span class="Special">{</span>epoch_accuracy<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L822" class="LineNr">822 </span>                    <span class="String">f'loss: </span><span class="Special">{</span>epoch_loss<span class="Special">:.3f}</span><span class="String"> ('</span> <span class="Red">+</span>
+<span id="L823" class="LineNr">823 </span>                    <span class="String">f'data_loss: </span><span class="Special">{</span>epoch_data_loss<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L824" class="LineNr">824 </span>                    <span class="String">f'reg_loss: </span><span class="Special">{</span>epoch_regularization_loss<span class="Special">:.3f}</span><span class="String">), '</span> <span class="Red">+</span>
+<span id="L825" class="LineNr">825 </span>                    <span class="String">f'lr: </span><span class="Special">{</span><span class="Identifier">self</span>.optimizer.current_learning_rate<span class="Special">}</span><span class="String">'</span>)<span class="Error">    </span>
+<span id="L826" class="LineNr">826 </span>            <span class="Red">if</span> validation_data <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L827" class="LineNr">827 </span>                <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">evaluate</span>(<span class="Red">*</span>validation_data, batch_size<span class="Red">=</span>batch_size, verbose<span class="Red">=</span>verbose)
+<span id="L828" class="LineNr">828 </span>
+<span id="L829" class="LineNr">829 </span>    <span class="Statement">def</span> <span class="Green">evaluate</span>(<span class="Identifier">self</span>, X_val, y_val, <span class="Red">*</span>, batch_size<span class="Red">=</span><span class="OrangeItalic">None</span>, verbose<span class="Red">=</span><span class="Boolean">True</span>):
+<span id="L830" class="LineNr">830 </span>        validation_steps <span class="Red">=</span> <span class="Number">1</span>
+<span id="L831" class="LineNr">831 </span>        <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L832" class="LineNr">832 </span>            validation_steps <span class="Red">=</span> <span class="Green">len</span>(X_val) <span class="Red">//</span> batch_size
+<span id="L833" class="LineNr">833 </span>            <span class="Red">if</span> validation_steps <span class="Red">*</span> batch_size <span class="Red">&lt;</span> <span class="Green">len</span>(X_val):
+<span id="L834" class="LineNr">834 </span>                validation_steps <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L835" class="LineNr">835 </span>        <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L836" class="LineNr">836 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L837" class="LineNr">837 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L838" class="LineNr">838 </span>        <span class="Red">for</span> step <span class="Red">in</span> <span class="Green">range</span>(validation_steps):
+<span id="L839" class="LineNr">839 </span>            <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="OrangeItalic">None</span>:
+<span id="L840" class="LineNr">840 </span>                batch_X <span class="Red">=</span> X_val
+<span id="L841" class="LineNr">841 </span>                batch_y <span class="Red">=</span> y_val
+<span id="L842" class="LineNr">842 </span>            <span class="Red">else</span>:
+<span id="L843" class="LineNr">843 </span>                batch_X <span class="Red">=</span> X_val[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L844" class="LineNr">844 </span>                batch_y <span class="Red">=</span> y_val[step <span class="Red">*</span> batch_size:(step<span class="Red">+</span><span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L845" class="LineNr">845 </span>            output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">forward</span>(batch_X, training<span class="Red">=</span><span class="Boolean">False</span>)
+<span id="L846" class="LineNr">846 </span>            <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate</span>(output, batch_y)
+<span id="L847" class="LineNr">847 </span>            predictions <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>output_layer_activation<span class="Grey">.</span><span class="Function">predictions</span>(output)
+<span id="L848" class="LineNr">848 </span>            <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate</span>(predictions, batch_y)
+<span id="L849" class="LineNr">849 </span>        validation_loss <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">calculate_accumulated</span>()
+<span id="L850" class="LineNr">850 </span>        validation_accuracy <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">calculate_accumulated</span>()
+<span id="L851" class="LineNr">851 </span>        <span class="Red">if</span> verbose:
+<span id="L852" class="LineNr">852 </span>            <span class="Green">print</span>(<span class="String">f'validation, '</span> <span class="Red">+</span>
+<span id="L853" class="LineNr">853 </span>                <span class="String">f'acc: </span><span class="Special">{</span>validation_accuracy<span class="Special">:.3f}</span><span class="String">, '</span> <span class="Red">+</span>
+<span id="L854" class="LineNr">854 </span>                <span class="String">f'loss: </span><span class="Special">{</span>validation_loss<span class="Special">:.3f}</span><span class="String">'</span>)
+<span id="L855" class="LineNr">855 </span>
+<span id="L856" class="LineNr">856 </span>    <span class="Statement">def</span> <span class="Green">predict</span>(<span class="Identifier">self</span>, X, <span class="Red">*</span>, batch_size<span class="Red">=</span><span class="OrangeItalic">None</span>):
+<span id="L857" class="LineNr">857 </span>        prediction_steps <span class="Red">=</span> <span class="Number">1</span>
+<span id="L858" class="LineNr">858 </span>        <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L859" class="LineNr">859 </span>            prediction_steps <span class="Red">=</span> <span class="Green">len</span>(X) <span class="Red">//</span> batch_size
+<span id="L860" class="LineNr">860 </span>            <span class="Red">if</span> prediction_steps <span class="Red">*</span> batch_size <span class="Red">&lt;</span> <span class="Green">len</span>(X):
+<span id="L861" class="LineNr">861 </span>                prediction_steps <span class="Red">+=</span> <span class="Number">1</span>
+<span id="L862" class="LineNr">862 </span>        output <span class="Red">=</span> []
+<span id="L863" class="LineNr">863 </span>        <span class="Red">for</span> step <span class="Red">in</span> <span class="Green">range</span>(prediction_steps):
+<span id="L864" class="LineNr">864 </span>            <span class="Red">if</span> batch_size <span class="Red">is</span> <span class="OrangeItalic">None</span>:
+<span id="L865" class="LineNr">865 </span>                batch_X <span class="Red">=</span> X
+<span id="L866" class="LineNr">866 </span>            <span class="Red">else</span>:
+<span id="L867" class="LineNr">867 </span>                batch_X <span class="Red">=</span> X[step <span class="Red">*</span> batch_size:(step <span class="Red">+</span> <span class="Number">1</span>) <span class="Red">*</span> batch_size]
+<span id="L868" class="LineNr">868 </span>            batch_output <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">forward</span>(batch_X, training<span class="Red">=</span><span class="Boolean">False</span>)
+<span id="L869" class="LineNr">869 </span>            output<span class="Grey">.</span><span class="Function">append</span>(batch_output)
+<span id="L870" class="LineNr">870 </span>        <span class="Statement">return</span> np<span class="Grey">.</span><span class="Function">vstack</span>(output)
+<span id="L871" class="LineNr">871 </span>
+<span id="L872" class="LineNr">872 </span>    <span class="Statement">def</span> <span class="Green">forward</span>(<span class="Identifier">self</span>, X, training):
+<span id="L873" class="LineNr">873 </span>        <span class="Identifier">self</span><span class="Grey">.</span>input_layer<span class="Grey">.</span><span class="Function">forward</span>(X, training)
+<span id="L874" class="LineNr">874 </span>        <span class="Red">for</span> layer <span class="Red">in</span> <span class="Identifier">self</span><span class="Grey">.</span>layers:
+<span id="L875" class="LineNr">875 </span>            layer<span class="Grey">.</span><span class="Function">forward</span>(layer<span class="Grey">.</span>prev<span class="Grey">.</span>output, training)
+<span id="L876" class="LineNr">876 </span>        <span class="Statement">return</span> layer<span class="Grey">.</span>output
+<span id="L877" class="LineNr">877 </span>
+<span id="L878" class="LineNr">878 </span>    <span class="Statement">def</span> <span class="Green">backward</span>(<span class="Identifier">self</span>, output, y):
+<span id="L879" class="LineNr">879 </span>        <span class="Red">if</span> <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output <span class="Red">is</span> <span class="Red">not</span> <span class="OrangeItalic">None</span>:
+<span id="L880" class="LineNr">880 </span>            <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output<span class="Grey">.</span><span class="Function">backward</span>(output, y)
+<span id="L881" class="LineNr">881 </span>            <span class="Identifier">self</span><span class="Grey">.</span>layers[<span class="Red">-</span><span class="Number">1</span>]<span class="Grey">.</span>dinputs <span class="Red">=</span> <span class="Identifier">self</span><span class="Grey">.</span>softmax_classifier_output<span class="Grey">.</span>dinputs
+<span id="L882" class="LineNr">882 </span>            <span class="Red">for</span> layer <span class="Red">in</span> <span class="Green">reversed</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers[:<span class="Red">-</span><span class="Number">1</span>]):
+<span id="L883" class="LineNr">883 </span>                layer<span class="Grey">.</span><span class="Function">backward</span>(layer<span class="Grey">.</span>next<span class="Grey">.</span>dinputs)
+<span id="L884" class="LineNr">884 </span>            <span class="Statement">return</span>
+<span id="L885" class="LineNr">885 </span>        <span class="Identifier">self</span><span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">backward</span>(output, y)
+<span id="L886" class="LineNr">886 </span>        <span class="Red">for</span> layer <span class="Red">in</span> <span class="Green">reversed</span>(<span class="Identifier">self</span><span class="Grey">.</span>layers):
+<span id="L887" class="LineNr">887 </span>            layer<span class="Grey">.</span><span class="Function">backward</span>(layer<span class="Grey">.</span>next<span class="Grey">.</span>dinputs)
+<span id="L888" class="LineNr">888 </span>
+<span id="L889" class="LineNr">889 </span>    <span class="Statement">def</span> <span class="Green">get_parameters</span>(<span class="Identifier">self</span>):
+<span id="L890" class="LineNr">890 </span>        parameters <span class="Red">=</span> []
+<span id="L891" class="LineNr">891 </span>        <span class="Red">for</span> layer <span class="Red">in</span> <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers:
+<span id="L892" class="LineNr">892 </span>            parameters<span class="Grey">.</span><span class="Function">append</span>(layer<span class="Grey">.</span><span class="Function">get_parameters</span>())
+<span id="L893" class="LineNr">893 </span>        <span class="Statement">return</span> parameters
+<span id="L894" class="LineNr">894 </span>
+<span id="L895" class="LineNr">895 </span>    <span class="Statement">def</span> <span class="Green">set_parameters</span>(<span class="Identifier">self</span>, parameters):
+<span id="L896" class="LineNr">896 </span>        <span class="Red">for</span> parameter_set, layer <span class="Red">in</span> <span class="Green">zip</span>(parameters, <span class="Identifier">self</span><span class="Grey">.</span>trainable_layers):
+<span id="L897" class="LineNr">897 </span>            layer<span class="Grey">.</span><span class="Function">set_parameters</span>(<span class="Red">*</span>parameter_set)
+<span id="L898" class="LineNr">898 </span>
+<span id="L899" class="LineNr">899 </span>    <span class="Statement">def</span> <span class="Green">save_parameters</span>(<span class="Identifier">self</span>, path):
+<span id="L900" class="LineNr">900 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'wb'</span>) <span class="Statement">as</span> f:
+<span id="L901" class="LineNr">901 </span>            pickle<span class="Grey">.</span><span class="Function">dump</span>(<span class="Identifier">self</span><span class="Grey">.</span><span class="Function">get_parameters</span>(), f)
+<span id="L902" class="LineNr">902 </span>
+<span id="L903" class="LineNr">903 </span>    <span class="Statement">def</span> <span class="Green">load_parameters</span>(<span class="Identifier">self</span>, path):
+<span id="L904" class="LineNr">904 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'rb'</span>) <span class="Statement">as</span> f:
+<span id="L905" class="LineNr">905 </span>            <span class="Identifier">self</span><span class="Grey">.</span><span class="Function">load_parameters</span>(pickle<span class="Grey">.</span><span class="Function">load</span>(f))
+<span id="L906" class="LineNr">906 </span>
+<span id="L907" class="LineNr">907 </span>    <span class="Statement">def</span> <span class="Green">save</span>(<span class="Identifier">self</span>, path):
+<span id="L908" class="LineNr">908 </span>        model <span class="Red">=</span> copy<span class="Grey">.</span><span class="Function">deepcopy</span>(<span class="Identifier">self</span>)
+<span id="L909" class="LineNr">909 </span>        model<span class="Grey">.</span>loss<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L910" class="LineNr">910 </span>        model<span class="Grey">.</span>accuracy<span class="Grey">.</span><span class="Function">new_pass</span>()
+<span id="L911" class="LineNr">911 </span>        model<span class="Grey">.</span>input_layer<span class="Grey">.</span>__dict__<span class="Grey">.</span><span class="Function">pop</span>(<span class="String">'output'</span>, <span class="OrangeItalic">None</span>)
+<span id="L912" class="LineNr">912 </span>        model<span class="Grey">.</span>loss<span class="Grey">.</span>__dict__<span class="Grey">.</span><span class="Function">pop</span>(<span class="String">'dinputs'</span>, <span class="OrangeItalic">None</span>)
+<span id="L913" class="LineNr">913 </span>        <span class="Red">for</span> layer <span class="Red">in</span> model<span class="Grey">.</span>layers:
+<span id="L914" class="LineNr">914 </span>            <span class="Red">for</span> <span class="Green">property</span> <span class="Red">in</span> [<span class="String">'inputs'</span>, <span class="String">'output'</span>, <span class="String">'dinputs'</span>, <span class="String">'dweights'</span>, <span class="String">'dbiases'</span>]:
+<span id="L915" class="LineNr">915 </span>                layer<span class="Grey">.</span>__dict__<span class="Grey">.</span><span class="Function">pop</span>(<span class="Green">property</span>, <span class="OrangeItalic">None</span>)
+<span id="L916" class="LineNr">916 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'wb'</span>) <span class="Statement">as</span> f:
+<span id="L917" class="LineNr">917 </span>            pickle<span class="Grey">.</span><span class="Function">dump</span>(model, f)
+<span id="L918" class="LineNr">918 </span>
+<span id="L919" class="LineNr">919 </span>    <span class="OrangeItalic">@</span><span class="OrangeItalic">staticmethod</span>
+<span id="L920" class="LineNr">920 </span>    <span class="Statement">def</span> <span class="Green">load</span>(path):
+<span id="L921" class="LineNr">921 </span>        <span class="Statement">with</span> <span class="Green">open</span>(path, <span class="String">'rb'</span>) <span class="Statement">as</span> f:
+<span id="L922" class="LineNr">922 </span>            model <span class="Red">=</span> pickle<span class="Grey">.</span><span class="Function">load</span>(f)
+<span id="L923" class="LineNr">923 </span>        <span class="Statement">return</span> model
+</pre>
+</body>
+
+</html>
+<!-- vim: set foldmethod=manual : -->
